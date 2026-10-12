@@ -1,178 +1,238 @@
 
-<!doctype html>
+<!DOCTYPE html>
 <html lang="hi">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Arif Agro Works | Management</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arif Agro Works | Portal V5.3</title>
+
 <style>
 :root{
-font-family:system-ui,sans-serif;
-color:#edf5f8;
-background:#071b28
+  font-family:system-ui,-apple-system,Arial,sans-serif;
+  color:#edf5f8;
+  background:#071b28;
 }
 *{box-sizing:border-box}
 body{margin:0}
 header{
-background:#0c2c3d;
-border-bottom:3px solid #ff752e;
-padding:16px;
-display:flex;
-justify-content:space-between;
-align-items:center;
-gap:10px
+  background:#0c2c3d;
+  border-bottom:3px solid #ff752e;
+  padding:16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
 }
 h1{font-size:20px;margin:0}
-b,.accent{color:#ff752e}
+.accent{color:#ff752e}
 small,.muted{color:#a8c0ca}
 main{max-width:900px;margin:18px auto;padding:0 12px}
 .panel{
-background:#103044;
-border:1px solid #325365;
-border-radius:15px;
-padding:18px;
-margin-bottom:15px
+  background:#103044;
+  border:1px solid #325365;
+  border-radius:15px;
+  padding:18px;
+  margin-bottom:15px;
 }
-h2{margin:0 0 12px;font-size:20px}
+h2{font-size:20px;margin:0 0 12px}
 h3{font-size:16px}
 label{
-display:block;
-font-size:13px;
-color:#c8dce5;
-margin:9px 0
+  display:block;
+  font-size:13px;
+  color:#c8dce5;
+  margin:9px 0;
 }
 input,select,textarea{
-display:block;
-width:100%;
-background:#071e2d;
-color:#fff;
-border:1px solid #547083;
-border-radius:8px;
-padding:11px;
-margin-top:5px;
-font-size:16px
+  display:block;
+  width:100%;
+  background:#071e2d;
+  color:#fff;
+  border:1px solid #547083;
+  border-radius:8px;
+  padding:11px;
+  margin-top:5px;
+  font-size:16px;
 }
 textarea{min-height:60px}
 button{
-background:#ff752e;
-color:#102330;
-border:0;
-border-radius:9px;
-padding:11px 13px;
-font-weight:700;
-cursor:pointer
+  background:#ff752e;
+  color:#102330;
+  border:0;
+  border-radius:9px;
+  padding:11px 13px;
+  font-weight:700;
+  cursor:pointer;
 }
 button.secondary{
-background:#22465a;
-color:white;
-border:1px solid #607f91
+  background:#22465a;
+  color:white;
+  border:1px solid #607f91;
 }
-button:disabled{opacity:.6}
+button:disabled{opacity:.55;cursor:wait}
 .hide{display:none!important}
 .tabs{
-display:flex;
-gap:6px;
-flex-wrap:wrap;
-margin-bottom:14px
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-bottom:14px;
 }
 .tabs button{font-size:13px;padding:9px 10px}
 .tabs .active{background:#ff752e;color:#102330}
-.tabs button:not(.active){background:#22465a;color:white}
+.tabs button:not(.active){background:#22465a;color:#fff}
 .grid{
-display:grid;
-grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
-gap:10px
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:10px;
 }
 .item{
-border:1px solid #39586b;
-border-radius:10px;
-padding:12px;
-margin:8px 0;
-background:#092333;
-overflow-wrap:anywhere
+  border:1px solid #39586b;
+  border-radius:10px;
+  padding:12px;
+  margin:8px 0;
+  background:#092333;
+  overflow-wrap:anywhere;
 }
 .item small{display:block;margin-top:5px}
 .actions{
-display:flex;
-gap:8px;
-flex-wrap:wrap;
-margin-top:10px
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:10px;
 }
-#status{
-color:#ffbf92;
-white-space:pre-wrap;
-min-height:22px
+.message{
+  margin-top:12px;
+  color:#ffca9e;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  font-size:13px;
 }
+.success{color:#7be3a6}
 .att-row{
-display:grid;
-grid-template-columns:minmax(100px,1.3fr) minmax(130px,1fr) minmax(90px,.6fr);
-gap:10px;
-align-items:end;
-border-bottom:1px solid #365568;
-padding:12px 0
+  display:grid;
+  grid-template-columns:minmax(100px,1.3fr) minmax(130px,1fr) minmax(90px,.6fr);
+  gap:10px;
+  align-items:end;
+  border-bottom:1px solid #365568;
+  padding:12px 0;
 }
 .att-name{font-weight:700;padding-bottom:13px}
 .att-row label{margin:0}
 .att-row select,.att-row input{margin-top:4px}
-.att-head{color:#a8c0ca;font-size:12px}
 footer{
-text-align:center;
-color:#91aeba;
-padding:20px;
-font-size:12px
+  text-align:center;
+  color:#91aeba;
+  padding:20px;
+  font-size:12px;
 }
 @media(max-width:540px){
-.att-row{
-grid-template-columns:1fr 1fr
-}
-.att-name{
-grid-column:1/-1;
-padding-bottom:0
-}
+  .att-row{grid-template-columns:1fr 1fr}
+  .att-name{grid-column:1/-1;padding-bottom:0}
 }
 </style>
 </head>
+
 <body>
 
 <header>
-<div>
-<h1>ARIF <b>AGRO</b> WORKS</h1>
-<small>PRIVATE MANAGEMENT PORTAL · V5.2</small>
-</div>
-<button class="secondary hide" id="logout">Logout</button>
+  <div>
+    <h1>ARIF <span class="accent">AGRO</span> WORKS</h1>
+    <small>PRIVATE MANAGEMENT PORTAL · V5.3</small>
+  </div>
+  <button class="secondary hide" id="logout" type="button">
+    Logout
+  </button>
 </header>
 
 <main>
+
 <section class="panel" id="login">
-<h2>Master / Incharge Login</h2>
-<label>Email
-<input id="email" type="email" autocomplete="username">
-</label>
-<label>Password
-<input id="password" type="password" autocomplete="current-password">
-</label>
-<button id="signin">Secure Login</button>
+  <h2>Master / Incharge Login</h2>
+
+  <form id="loginForm">
+    <label>Email
+      <input
+        id="email"
+        type="email"
+        autocomplete="username"
+        required>
+    </label>
+
+    <label>Password
+      <input
+        id="password"
+        type="password"
+        autocomplete="current-password"
+        required>
+    </label>
+
+    <button id="signin" type="submit">
+      Secure Login
+    </button>
+  </form>
+
+  <div class="message" id="loginStatus" role="status">
+    Portal loading...
+  </div>
 </section>
 
 <section id="app" class="hide">
-<section class="panel">
-<div id="who" class="muted"></div>
-<label>Site चुनें
-<select id="site"></select>
-</label>
-<div id="tabs" class="tabs"></div>
-</section>
-<section class="panel" id="content"></section>
+  <section class="panel">
+    <div id="who" class="muted"></div>
+
+    <label>Site चुनें
+      <select id="site"></select>
+    </label>
+
+    <div id="tabs" class="tabs"></div>
+  </section>
+
+  <section class="panel" id="content"></section>
 </section>
 
-<p id="status" role="status"></p>
+<div class="message" id="status" role="status"></div>
+
 </main>
 
-<footer>Authorized access only · Test site permissions before using real financial records</footer>
+<footer>
+  Authorized access only · Arif Agro Works
+</footer>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
-(()=>{
+/*
+  Login diagnostics are installed BEFORE the
+  Supabase library is loaded.
+*/
+(function(){
+  var status=document.getElementById('loginStatus');
+
+  function show(message){
+    if(status) status.textContent=String(message);
+  }
+
+  window.portalLoginMessage=show;
+
+  window.addEventListener('error',function(e){
+    show('JavaScript Error: '+(e.message||'Unknown error'));
+  });
+
+  window.addEventListener('unhandledrejection',function(e){
+    var reason=e.reason;
+    show('Request Error: '+(
+      reason && reason.message ? reason.message : String(reason)
+    ));
+  });
+
+  show('Connecting to secure login service...');
+})();
+</script>
+
+<script
+  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
+  onerror="window.portalLoginMessage('Supabase library load failed. Internet/CDN connection check करें.')">
+</script>
+
+<script>
+(function(){
 'use strict';
 
 const URL='https://qfydekphbdpvvczhimjs.supabase.co';
@@ -181,779 +241,636 @@ const KEY='sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn';
 const $=id=>document.getElementById(id);
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({
-'&':'&amp;',
-'<':'&lt;',
-'>':'&gt;',
-'"':'&quot;',
-"'":'&#39;'
+  '&':'&amp;',
+  '<':'&lt;',
+  '>':'&gt;',
+  '"':'&quot;',
+  "'":'&#39;'
 }[c]));
 
-const hide=(id,yes)=>$(id).classList.toggle('hide',yes);
-const msg=v=>$('status').textContent=v;
-
-const today=()=>{
-const d=new Date();
-return new Date(d.getTime()-d.getTimezoneOffset()*60000)
-.toISOString().slice(0,10);
+const hide=(id,yes)=>{
+  const el=$(id);
+  if(el) el.classList.toggle('hide',yes);
 };
 
-let db,role=null,sites=[],workers=[],tab='workers';
-let editing=null,showDeleted=false,renderVersion=0;
+const msg=v=>{
+  if($('status')) $('status').textContent=String(v);
+};
+
+const loginMsg=v=>{
+  if($('loginStatus')) $('loginStatus').textContent=String(v);
+};
+
+const today=()=>{
+  const d=new Date();
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000)
+    .toISOString().slice(0,10);
+};
+
+const money=n=>'₹'+Number(n||0).toLocaleString('en-IN',{
+  minimumFractionDigits:2,
+  maximumFractionDigits:2
+});
+
+let db;
+let role=null;
+let sites=[];
+let workers=[];
+let tab='workers';
+let editing=null;
+let showDeleted=false;
+let renderVersion=0;
+let loggingIn=false;
 
 const modules=[
-['workers','Workers'],
-['summary','Salary Summary'],
-['attendance','Attendance'],
-['advances','Advances'],
-['expenses','Expenses'],
-['salary','Salary Payments'],
-['cash','Cash Ledger']
+  ['workers','Workers'],
+  ['summary','Salary Summary'],
+  ['attendance','Attendance'],
+  ['advances','Advances'],
+  ['expenses','Expenses'],
+  ['salary','Salary Payments'],
+  ['cash','Cash Ledger']
 ];
 
 const spec={
-workers:{
-table:'workers',
-fields:[
-['full_name','Worker name','text',true],
-['mobile_number','Mobile','tel'],
-['joining_date','Joining date','date'],
-['leaving_date','Leaving date','date'],
-['daily_wage','Daily wage','number'],
-['overtime_rate','OT rate','number']
-]},
-advances:{
-table:'worker_advances',
-fields:[
-['worker_id','Worker','worker',true],
-['advance_date','Date','date',true],
-['amount','Amount','number',true],
-['notes','Notes','text']
-]},
-expenses:{
-table:'site_expenses',
-fields:[
-['expense_date','Date','date',true],
-['category','Category','text',true],
-['description','Description','text'],
-['amount','Amount','number',true]
-]},
-salary:{
-table:'worker_salary_payments',
-fields:[
-['worker_id','Worker','worker',true],
-['payment_date','Date','date',true],
-['period_start','Period from','date'],
-['period_end','Period to','date'],
-['amount','Amount','number',true],
-['notes','Notes','text']
-]},
-cash:{
-table:'site_cash_ledger',
-fields:[
-['entry_date','Date','date',true],
-['entry_type','Type','cash',true],
-['category','Category','text',true],
-['description','Description','text'],
-['amount','Amount','number',true]
-]}
+  workers:{
+    table:'workers',
+    fields:[
+      ['full_name','Worker name','text',true],
+      ['mobile_number','Mobile','tel'],
+      ['joining_date','Joining date','date'],
+      ['leaving_date','Leaving date','date'],
+      ['daily_wage','Daily wage','number'],
+      ['overtime_rate','OT rate','number']
+    ]
+  },
+  advances:{
+    table:'worker_advances',
+    fields:[
+      ['worker_id','Worker','worker',true],
+      ['advance_date','Date','date',true],
+      ['amount','Amount','number',true],
+      ['notes','Notes','text']
+    ]
+  },
+  expenses:{
+    table:'site_expenses',
+    fields:[
+      ['expense_date','Date','date',true],
+      ['category','Category','text',true],
+      ['description','Description','text'],
+      ['amount','Amount','number',true]
+    ]
+  },
+  salary:{
+    table:'worker_salary_payments',
+    fields:[
+      ['worker_id','Worker','worker',true],
+      ['payment_date','Date','date',true],
+      ['period_start','Period from','date'],
+      ['period_end','Period to','date'],
+      ['amount','Amount','number',true],
+      ['notes','Notes','text']
+    ]
+  },
+  cash:{
+    table:'site_cash_ledger',
+    fields:[
+      ['entry_date','Date','date',true],
+      ['entry_type','Type','cash',true],
+      ['category','Category','text',true],
+      ['description','Description','text'],
+      ['amount','Amount','number',true]
+    ]
+  }
 };
+
+/* SUPABASE INITIALIZATION */
 
 try{
-db=window.supabase.createClient(URL,KEY,{
-auth:{persistSession:true,autoRefreshToken:true}
-});
+  if(!window.supabase ||
+     typeof window.supabase.createClient!=='function'){
+    throw new Error(
+      'Supabase library नहीं खुली। CDN या Internet connection problem.'
+    );
+  }
+
+  db=window.supabase.createClient(URL,KEY,{
+    auth:{
+      persistSession:true,
+      autoRefreshToken:true,
+      detectSessionInUrl:false
+    }
+  });
+
+  loginMsg('Login service ready. Email और Password भरें.');
+
 }catch(e){
-msg('Supabase library नहीं खुली');
-return;
+  loginMsg('Initialization Error: '+e.message);
+  return;
 }
 
-$('signin').onclick=async()=>{
-msg('Login हो रहा है...');
-const {error}=await db.auth.signInWithPassword({
-email:$('email').value.trim(),
-password:$('password').value
+/* LOGIN */
+
+function loginBusy(yes){
+  loggingIn=yes;
+  $('signin').disabled=yes;
+  $('signin').textContent=yes?'Logging in...':'Secure Login';
+}
+
+function timeoutPromise(ms){
+  return new Promise((_,reject)=>{
+    setTimeout(()=>{
+      reject(new Error(
+        'Login request timed out. Internet या Supabase connection check करें.'
+      ));
+    },ms);
+  });
+}
+
+async function signIn(e){
+  e.preventDefault();
+
+  if(loggingIn) return;
+
+  const email=$('email').value.trim();
+  const password=$('password').value;
+
+  if(!email||!password){
+    loginMsg('Email और Password दोनों भरें।');
+    return;
+  }
+
+  loginBusy(true);
+  loginMsg('Connecting to Supabase...');
+
+  try{
+    const result=await Promise.race([
+      db.auth.signInWithPassword({email,password}),
+      timeoutPromise(15000)
+    ]);
+
+    if(result.error){
+      throw result.error;
+    }
+
+    loginMsg('Login successful. Loading your sites...');
+
+    await Promise.race([
+      init(),
+      timeoutPromise(15000)
+    ]);
+
+  }catch(e){
+    loginMsg('Login Error: '+(e.message||String(e)));
+  }finally{
+    loginBusy(false);
+  }
+}
+
+$('loginForm').addEventListener('submit',signIn);
+
+$('logout').addEventListener('click',async()=>{
+  try{
+    await db.auth.signOut();
+  }catch(e){
+    msg('Logout Error: '+e.message);
+  }
+
+  role=null;
+  hide('login',false);
+  hide('app',true);
+  hide('logout',true);
+  loginMsg('Logged out. Login again.');
 });
-if(error)msg(error.message);
-else await init();
-};
 
-$('logout').onclick=async()=>{
-await db.auth.signOut();
-role=null;
-hide('login',false);
-hide('app',true);
-hide('logout',true);
-msg('Logged out');
-};
+$('site').addEventListener('change',()=>{
+  editing=null;
+  showDeleted=false;
+  render();
+});
 
-$('site').onchange=()=>{
-editing=null;
-showDeleted=false;
-render();
-};
+/* USER PROFILE AND SITES */
 
 async function init(){
-const {data:{user},error:ue}=await db.auth.getUser();
+  const userResult=await db.auth.getUser();
 
-if(ue||!user){
-hide('login',false);
-hide('app',true);
-hide('logout',true);
-return;
+  if(userResult.error) throw userResult.error;
+
+  const user=userResult.data.user;
+
+  if(!user){
+    hide('login',false);
+    hide('app',true);
+    hide('logout',true);
+    loginMsg('Login service ready. Please sign in.');
+    return;
+  }
+
+  const {data:p,error:pe}=await db
+    .from('staff_profiles')
+    .select('role,full_name')
+    .eq('user_id',user.id)
+    .single();
+
+  if(pe) throw new Error('Staff Profile: '+pe.message);
+
+  if(!p){
+    throw new Error('Staff profile not found.');
+  }
+
+  role=p.role;
+
+  const {data:s,error:se}=await db
+    .from('sites')
+    .select('id,site_name')
+    .eq('is_active',true)
+    .order('site_name');
+
+  if(se) throw new Error('Sites: '+se.message);
+
+  sites=s||[];
+
+  $('who').textContent=(p.full_name||'Staff')+' · '+role;
+
+  const previous=$('site').value;
+
+  $('site').innerHTML=sites.map(x=>
+    `<option value="${esc(x.id)}">${esc(x.site_name)}</option>`
+  ).join('');
+
+  if(sites.some(x=>String(x.id)===previous)){
+    $('site').value=previous;
+  }
+
+  hide('login',true);
+  hide('app',false);
+  hide('logout',false);
+
+  await render();
+  msg('Welcome to Arif Agro Works Portal V5.3');
 }
 
-const {data:p,error:pe}=await db
-.from('staff_profiles')
-.select('role,full_name')
-.eq('user_id',user.id)
-.single();
-
-if(pe||!p){
-msg('Profile error: '+(pe?.message||'Not found'));
-return;
-}
-
-role=p.role;
-
-const {data:s,error:se}=await db
-.from('sites')
-.select('id,site_name')
-.eq('is_active',true)
-.order('site_name');
-
-if(se){
-msg('Sites error: '+se.message);
-return;
-}
-
-sites=s||[];
-
-hide('login',true);
-hide('app',false);
-hide('logout',false);
-
-$('who').textContent=(p.full_name||'Staff')+' · '+role;
-
-const previous=$('site').value;
-
-$('site').innerHTML=sites.map(x=>
-`<option value="${esc(x.id)}">${esc(x.site_name)}</option>`
-).join('');
-
-if(sites.some(x=>x.id===previous)){
-$('site').value=previous;
-}
-
-await render();
-}
+/* FORM FIELDS */
 
 function fieldHTML([k,label,type,required]){
-let input;
+  let input;
 
-if(type==='worker'){
-input=`<select name="${k}" ${required?'required':''}>
-<option value="">Choose worker</option>
-${workers.filter(w=>w.is_deleted!==true&&w.is_active!==false)
-.map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}</option>`)
-.join('')}
-</select>`;
-}else if(type==='cash'){
-input=`<select name="${k}">
-<option value="cash_in">Cash in</option>
-<option value="cash_out">Cash out</option>
-</select>`;
-}else{
-input=`<input name="${k}" type="${type}"
-${required?'required':''}
-${type==='number'?'step="0.01" min="0"':''}
-${type==='date'?'value="'+today()+'"':''}>`;
-}
+  if(type==='worker'){
+    input=`<select name="${k}" ${required?'required':''}>
+      <option value="">Choose worker</option>
+      ${workers
+        .filter(w=>w.is_deleted!==true&&w.is_active!==false)
+        .map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}</option>`)
+        .join('')}
+    </select>`;
 
-return `<label>${esc(label)}${required?' *':''}${input}</label>`;
+  }else if(type==='cash'){
+    input=`<select name="${k}">
+      <option value="cash_in">Cash in</option>
+      <option value="cash_out">Cash out</option>
+    </select>`;
+
+  }else{
+    input=`<input name="${k}" type="${type}"
+      ${required?'required':''}
+      ${type==='number'?'step="0.01" min="0"':''}
+      ${type==='date'?'value="'+today()+'"':''}>`;
+  }
+
+  return `<label>${esc(label)}${required?' *':''}${input}</label>`;
 }
 
 /* SALARY SUMMARY */
 
 async function renderSummary(site){
-const localToday=today();
-const month=localToday.slice(0,7);
+  const localToday=today();
+  const month=localToday.slice(0,7);
 
-$('content').innerHTML=`
-<h2>Salary Summary</h2>
-<p class="muted">Single Worker या All Workers की Salary Calculate करें</p>
+  $('content').innerHTML=`
+    <h2>Salary Summary</h2>
+    <p class="muted">
+      Single Worker या All Workers की Salary Calculate करें
+    </p>
 
-<label>Worker चुनें
-<select id="salaryWorker">
-<option value="all">All Workers — सबकी Salary</option>
-</select>
-</label>
+    <label>Worker चुनें
+      <select id="salaryWorker">
+        <option value="all">All Workers — सबकी Salary</option>
+      </select>
+    </label>
 
-<div class="grid">
-<label>From
-<input type="date" id="fromDate" value="${month}-01">
-</label>
-<label>To
-<input type="date" id="toDate" value="${localToday}">
-</label>
-</div>
+    <div class="grid">
+      <label>From
+        <input type="date" id="fromDate" value="${month}-01">
+      </label>
+      <label>To
+        <input type="date" id="toDate" value="${localToday}">
+      </label>
+    </div>
 
-<button id="calculate">Calculate Salary</button>
-<p class="muted">
-Current worker wage और OT rate पर हिसाब;
-पुरानी rates बदलने पर historical calculation अलग हो सकती है।
-</p>
-<div id="salaryResults"></div>`;
+    <button type="button" id="calculate">
+      Calculate Salary
+    </button>
 
-const {data:allWorkers,error:workerError}=await db
-.from('workers')
-.select('id,full_name,daily_wage,overtime_rate,is_deleted')
-.eq('site_id',site)
-.order('full_name');
+    <p class="muted">
+      Current wage और OT rate पर calculation होती है।
+    </p>
 
-if(workerError){
-msg('Workers loading failed: '+workerError.message);
-return;
-}
+    <div id="salaryResults"></div>
+  `;
 
-const workerList=allWorkers||[];
+  const {data:allWorkers,error:workerError}=await db
+    .from('workers')
+    .select('id,full_name,daily_wage,overtime_rate,is_deleted')
+    .eq('site_id',site)
+    .order('full_name');
 
-$('salaryWorker').innerHTML=
-'<option value="all">All Workers — सबकी Salary</option>'+
-workerList.map(w=>
-`<option value="${esc(w.id)}">${esc(w.full_name)}${w.is_deleted?' (Archived)':''}</option>`
-).join('');
+  if(workerError){
+    msg('Workers loading failed: '+workerError.message);
+    return;
+  }
 
-$('salaryWorker').onchange=()=>{
-$('salaryResults').innerHTML='';
-};
+  const workerList=allWorkers||[];
 
-$('calculate').onclick=async()=>{
-const start=$('fromDate').value;
-const end=$('toDate').value;
-const selectedWorker=$('salaryWorker').value;
+  $('salaryWorker').innerHTML=
+    '<option value="all">All Workers — सबकी Salary</option>'+
+    workerList.map(w=>
+      `<option value="${esc(w.id)}">
+        ${esc(w.full_name)}${w.is_deleted?' (Archived)':''}
+      </option>`
+    ).join('');
 
-if(!start||!end||start>end){
-msg('Valid dates चुनें');
-return;
-}
+  $('salaryWorker').onchange=()=>{
+    $('salaryResults').innerHTML='';
+  };
 
-const selectedWorkers=selectedWorker==='all'
-?workerList
-:workerList.filter(w=>w.id===selectedWorker);
+  $('calculate').onclick=async()=>{
+    const start=$('fromDate').value;
+    const end=$('toDate').value;
+    const selectedWorker=$('salaryWorker').value;
 
-if(!selectedWorkers.length){
-msg('Worker नहीं मिला');
-return;
-}
+    if(!start||!end||start>end){
+      msg('Valid dates चुनें');
+      return;
+    }
 
-const btn=$('calculate');
-btn.disabled=true;
-msg('Salary calculate हो रही है...');
+    const selectedWorkers=selectedWorker==='all'
+      ?workerList
+      :workerList.filter(w=>String(w.id)===selectedWorker);
 
-let attendanceQuery=db.from('worker_attendance')
-.select('worker_id,status,overtime_hours')
-.eq('site_id',site)
-.gte('attendance_date',start)
-.lte('attendance_date',end);
+    if(!selectedWorkers.length){
+      msg('Worker नहीं मिला');
+      return;
+    }
 
-let advancesQuery=db.from('worker_advances')
-.select('worker_id,amount')
-.eq('site_id',site)
-.gte('advance_date',start)
-.lte('advance_date',end);
+    const btn=$('calculate');
+    btn.disabled=true;
+    msg('Salary calculate हो रही है...');
 
-let paymentsQuery=db.from('worker_salary_payments')
-.select('worker_id,amount')
-.eq('site_id',site)
-.gte('payment_date',start)
-.lte('payment_date',end);
+    try{
+      let attendanceQuery=db.from('worker_attendance')
+        .select('worker_id,status,overtime_hours')
+        .eq('site_id',site)
+        .gte('attendance_date',start)
+        .lte('attendance_date',end);
 
-if(selectedWorker!=='all'){
-attendanceQuery=attendanceQuery.eq('worker_id',selectedWorker);
-advancesQuery=advancesQuery.eq('worker_id',selectedWorker);
-paymentsQuery=paymentsQuery.eq('worker_id',selectedWorker);
-}
+      let advancesQuery=db.from('worker_advances')
+        .select('worker_id,amount')
+        .eq('site_id',site)
+        .gte('advance_date',start)
+        .lte('advance_date',end);
 
-const [at,ad,pa]=await Promise.all([
-attendanceQuery.range(0,9999),
-advancesQuery.range(0,9999),
-paymentsQuery.range(0,9999)
-]);
+      let paymentsQuery=db.from('worker_salary_payments')
+        .select('worker_id,amount')
+        .eq('site_id',site)
+        .gte('payment_date',start)
+        .lte('payment_date',end);
 
-btn.disabled=false;
+      if(selectedWorker!=='all'){
+        attendanceQuery=attendanceQuery.eq('worker_id',selectedWorker);
+        advancesQuery=advancesQuery.eq('worker_id',selectedWorker);
+        paymentsQuery=paymentsQuery.eq('worker_id',selectedWorker);
+      }
 
-const failure=[at,ad,pa].find(x=>x.error);
+      const [at,ad,pa]=await Promise.all([
+        attendanceQuery.range(0,9999),
+        advancesQuery.range(0,9999),
+        paymentsQuery.range(0,9999)
+      ]);
 
-if(failure){
-msg('Calculation failed: '+failure.error.message);
-return;
-}
+      const failure=[at,ad,pa].find(x=>x.error);
 
-if([at,ad,pa].some(x=>x.data.length>=10000)){
-msg('बहुत ज्यादा records हैं; date range छोटा करो');
-return;
-}
+      if(failure) throw failure.error;
 
-const money=n=>'₹'+Number(n).toLocaleString('en-IN',{
-minimumFractionDigits:2,
-maximumFractionDigits:2
-});
+      if([at,ad,pa].some(x=>x.data.length>=10000)){
+        throw new Error('Date range छोटा करें; records बहुत ज्यादा हैं।');
+      }
 
-const total=(rows,id,key)=>rows
-.filter(r=>r.worker_id===id)
-.reduce((sum,r)=>sum+Number(r[key]||0),0);
+      const total=(rows,id,key)=>rows
+        .filter(r=>String(r.worker_id)===String(id))
+        .reduce((sum,r)=>sum+Number(r[key]||0),0);
 
-let overall=0;
+      let overall=0;
 
-$('salaryResults').innerHTML=selectedWorkers.map(w=>{
-const attendance=at.data.filter(r=>r.worker_id===w.id);
+      $('salaryResults').innerHTML=selectedWorkers.map(w=>{
+        const attendance=at.data.filter(r=>
+          String(r.worker_id)===String(w.id)
+        );
 
-const days=attendance.reduce((n,r)=>
-n+(r.status==='present'?1:r.status==='half_day'?0.5:0),0);
+        const days=attendance.reduce((n,r)=>
+          n+(r.status==='present'?1:
+          r.status==='half_day'?0.5:0),0
+        );
 
-const ot=total(attendance,w.id,'overtime_hours');
+        const ot=total(attendance,w.id,'overtime_hours');
+        const wage=days*Number(w.daily_wage||0);
+        const overtime=ot*Number(w.overtime_rate||0);
+        const advance=total(ad.data,w.id,'amount');
+        const paid=total(pa.data,w.id,'amount');
 
-const wage=days*Number(w.daily_wage||0);
-const overtime=ot*Number(w.overtime_rate||0);
-const advance=total(ad.data,w.id,'amount');
-const paid=total(pa.data,w.id,'amount');
+        const due=wage+overtime-advance-paid;
+        overall+=due;
 
-const due=wage+overtime-advance-paid;
-overall+=due;
+        return `<div class="item">
+          <strong>
+            ${esc(w.full_name)}
+            ${w.is_deleted?' (Archived)':''}
+          </strong>
+          <small>Paid days: ${days} · OT hours: ${ot}</small>
+          <small>
+            Wages ${money(wage)}
+            + OT ${money(overtime)}
+            − Advance ${money(advance)}
+            − Paid ${money(paid)}
+          </small>
+          <strong>Balance: ${money(due)}</strong>
+        </div>`;
+      }).join('')+
+      `<div class="item">
+        <strong>
+          ${selectedWorker==='all'
+            ?'Total balance'
+            :'Selected worker balance'}:
+          ${money(overall)}
+        </strong>
+      </div>`;
 
-return `<div class="item">
-<strong>${esc(w.full_name)}${w.is_deleted?' (Archived)':''}</strong>
-<small>Paid days: ${days} · OT hours: ${ot}</small>
-<small>
-Wages ${money(wage)} + OT ${money(overtime)}
-− Advance ${money(advance)} − Paid ${money(paid)}
-</small>
-<strong>Balance: ${money(due)}</strong>
-</div>`;
-}).join('')+
-`<div class="item">
-<strong>${selectedWorker==='all'?'Total balance':'Selected worker balance'}: ${money(overall)}</strong>
-</div>`;
+      msg('Salary calculation ready');
 
-msg('Calculation ready · Selected date range only');
-};
+    }catch(e){
+      msg('Calculation Error: '+e.message);
+    }finally{
+      btn.disabled=false;
+    }
+  };
 }
 
 /* BULK ATTENDANCE */
 
 async function renderAttendance(site){
-const activeWorkers=workers.filter(w=>
-w.is_active!==false&&w.is_deleted!==true
-);
-
-$('content').innerHTML=`
-<h2>Bulk Attendance</h2>
-<p class="muted">एक ही बार सभी Workers की Attendance लगाएँ।</p>
-
-<label>Attendance Date
-<input type="date" id="attDate" value="${today()}">
-</label>
-
-<div class="actions">
-<button type="button" class="secondary" id="loadAtt">
-Load Attendance
-</button>
-<button type="button" class="secondary" id="allPresent">
-Mark All Present
-</button>
-</div>
-
-<div id="attList"></div>
-
-<div class="actions">
-<button id="saveAll" type="button">Save All Attendance</button>
-</div>
-
-<p class="muted" id="attInfo"></p>`;
-
-const dateInput=$('attDate');
-const list=$('attList');
-const info=$('attInfo');
-const save=$('saveAll');
-
-let existing=new Map();
-let loadedDate='';
-let loading=false;
-
-function setBusy(v){
-loading=v;
-save.disabled=v;
-$('loadAtt').disabled=v;
-$('allPresent').disabled=v;
-dateInput.disabled=v;
-}
-
-function buildRows(){
-if(!activeWorkers.length){
-list.innerHTML='<p class="muted">No active workers</p>';
-save.disabled=true;
-return;
-}
-
-list.innerHTML=activeWorkers.map(w=>{
-const a=existing.get(String(w.id));
-const status=a?.status||'present';
-const ot=Number(a?.overtime_hours||0);
-
-return `<div class="att-row" data-worker="${esc(w.id)}">
-<div class="att-name">${esc(w.full_name)}
-<small>${a?'Saved attendance':'New attendance'}</small>
-</div>
-
-<label>Status
-<select class="attStatus">
-<option value="present" ${status==='present'?'selected':''}>Present</option>
-<option value="absent" ${status==='absent'?'selected':''}>Absent</option>
-<option value="half_day" ${status==='half_day'?'selected':''}>Half Day</option>
-<option value="leave" ${status==='leave'?'selected':''}>Leave</option>
-</select>
-</label>
-
-<label>OT Hours
-<input class="attOT" type="number" min="0" step="0.5" value="${ot}">
-</label>
-</div>`;
-}).join('');
-
-list.querySelectorAll('.attStatus').forEach(s=>{
-s.onchange=()=>{
-const row=s.closest('.att-row');
-if(s.value==='absent'||s.value==='leave'){
-row.querySelector('.attOT').value=0;
-}
-};
-});
-}
-
-async function loadAttendance(){
-const date=dateInput.value;
-
-if(!date){
-msg('Attendance date चुनें');
-return;
-}
-
-setBusy(true);
-info.textContent='Attendance loading...';
-
-const {data,error}=await db
-.from('worker_attendance')
-.select('id,worker_id,status,overtime_hours')
-.eq('site_id',site)
-.eq('attendance_date',date)
-.range(0,9999);
-
-if(error){
-setBusy(false);
-msg('Attendance load failed: '+error.message);
-info.textContent='Loading failed';
-return;
-}
-
-if(data.length>=10000){
-setBusy(false);
-msg('Too many attendance records');
-return;
-}
-
-existing=new Map();
-let duplicates=0;
-
-for(const r of data){
-const key=String(r.worker_id);
-if(existing.has(key))duplicates++;
-else existing.set(key,r);
-}
-
-loadedDate=date;
-buildRows();
-setBusy(false);
-
-info.textContent=
-`${activeWorkers.length} Active Workers · ${data.length} Saved Entries`;
-
-if(duplicates){
-msg('Warning: इस Date पर Duplicate Attendance records मिले हैं। Save से पहले database साफ करना होगा।');
-}else{
-msg('Attendance loaded: '+date);
-}
-}
-
-$('loadAtt').onclick=loadAttendance;
-
-dateInput.onchange=()=>{
-loadedDate='';
-existing.clear();
-list.innerHTML='<p class="muted">नई Date के लिए Load Attendance दबाएँ।</p>';
-info.textContent='';
-save.disabled=true;
-};
-
-$('allPresent').onclick=()=>{
-list.querySelectorAll('.attStatus').forEach(s=>{
-s.value='present';
-});
-msg('All marked Present. Save All दबाने पर Save होगा।');
-};
-
-save.onclick=async()=>{
-const date=dateInput.value;
-
-if(!date||date!==loadedDate){
-msg('पहले इसी Date की Attendance Load करें');
-return;
-}
-
-const rows=[...list.querySelectorAll('.att-row')];
-
-if(!rows.length){
-msg('No active workers');
-return;
-}
-
-const entries=rows.map(row=>{
-const status=row.querySelector('.attStatus').value;
-const overtime=Number(row.querySelector('.attOT').value);
-
-return {
-worker_id:row.dataset.worker,
-status,
-overtime_hours:status==='absent'||status==='leave'?0:overtime
-};
-});
-
-if(entries.some(r=>!Number.isFinite(r.overtime_hours)||r.overtime_hours<0)){
-msg('OT Hours सही भरें');
-return;
-}
-
-if(!confirm(
-`${date} की ${entries.length} Workers की Attendance Save/Update करें?`
-))return;
-
-setBusy(true);
-msg('Attendance saving...');
-
-let saved=0;
-const failures=[];
-
-/*
-Existing row को UPDATE और नई row को INSERT करते हैं।
-यह तरीका database में unique constraint न होने पर भी
-existing attendance को पहचान सकता है।
-*/
-
-for(const entry of entries){
-const old=existing.get(String(entry.worker_id));
-
-const values={
-site_id:site,
-worker_id:entry.worker_id,
-attendance_date:date,
-status:entry.status,
-overtime_hours:entry.overtime_hours
-};
-
-let result;
-
-if(old){
-result=await db
-.from('worker_attendance')
-.update({
-status:entry.status,
-overtime_hours:entry.overtime_hours
-})
-.eq('id',old.id)
-.eq('site_id',site)
-.select('id');
-}else{
-result=await db
-.from('worker_attendance')
-.insert(values)
-.select('id');
-}
-
-if(result.error||!result.data?.length){
-failures.push(
-entry.worker_id+': '+(result.error?.message||'Permission denied')
-);
-}else{
-saved++;
-}
-}
-
-setBusy(false);
-
-if(failures.length){
-msg(`${saved} Saved · ${failures.length} Failed\n${failures.slice(0,5).join('\n')}`);
-}else{
-msg(`Success! ${saved} Workers की Attendance Save हो गई।`);
-}
-
-await loadAttendance();
-};
-
-await loadAttendance();
-}
-
-/* MAIN RENDER */
-
-async function render(){
-const version=++renderVersion;
-const site=$('site').value;
-
-if(!site){
-$('content').textContent='No assigned active sites';
-return;
-}
-
-const tabs=modules.filter(([k])=>
-role==='master'||!['salary','cash','summary'].includes(k)
-);
-
-if(!tabs.some(([k])=>k===tab))tab='workers';
-
-$('tabs').innerHTML=tabs.map(([k,n])=>
-`<button data-tab="${k}" class="${tab===k?'active':''}">${n}</button>`
-).join('');
-
-$('tabs').querySelectorAll('[data-tab]').forEach(b=>{
-b.onclick=()=>{
-tab=b.dataset.tab;
-editing=null;
-showDeleted=false;
-render();
-};
-});
-
-const {data:w,error:we}=await db
-.from('workers')
-.select('id,full_name,is_active,is_deleted')
-.eq('site_id',site)
-.order('full_name');
-
-if(version!==renderVersion)return;
-
-if(we){
-msg('Workers: '+we.message);
-return;
-}
-
-workers=w||[];
-
-if(tab==='summary'){
-await renderSummary(site);
-return;
-}
-
-if(tab==='attendance'){
-await renderAttendance(site);
-return;
-}
-
-const sp=spec[tab];
-
-const order=tab==='workers'
-?'created_at'
-:(sp.fields.find(f=>f[2]==='date')||['created_at'])[0];
-
-const {data,error}=await db
-.from(sp.table)
-.select('*')
-.eq('site_id',site)
-.order(order,{ascending:false})
-.limit(100);
-
-if(version!==renderVersion)return;
-
-if(error){
-msg('Entries: '+error.message);
-return;
-}
-
-const visible=tab==='workers'
-?(data||[]).filter(r=>showDeleted
-?r.is_deleted===true
-:r.is_deleted!==true)
-:(data||[]);
-
-const title=tabs.find(x=>x[0]===tab)?.[1]||tab;
-
-$('content').innerHTML=`
-<h2>${esc(title)}</h2>
-<p class="muted">
-${esc(sites.find(s=>s.id===site)?.site_name)} · Latest 100 records
-</p>
-
-${tab==='workers'&&role==='master'
-?`<button type="button" class="secondary" id="deletedToggle">
-${showDeleted?'Show Workers':'Deleted Workers / Restore'}
-</button>`:''}
-
-<div id="entries"></div>
-<h3 id="formtitle">नई Entry</h3>
-<form id="entry" class="grid"></form>`;
-
-if($('deletedToggle')){
-$('deletedToggle').onclick=()=>{
-showDeleted=!showDeleted;
-editing=null;
-render();
-};
-}
-
-const canWrite=role==='master'
-||['workers','advances','expenses'].includes(tab);
-
-const f=$('entry');
-
-if(!canWrite||(tab==='workers'&&showDeleted)){
-f.innerHTML='<p class="muted">'+
-(showDeleted
-?'Deleted Workers को Restore करने के लिए ऊपर Button दबाएँ।'
-:'Only Master Admin can edit this section.')+
-'</p>';
-}else{
-f.innerHTML=sp.fields.map(fieldHTML).join('')+
-`<div class="actions">
-<button type="submit" id="savebtn">Save Entry</button>
-<button type="button" class="secondary hide" id="cancelEdit">
-Cancel Edit
-</button>
-</div>`;
-
-$('cancelEdit').onclick=()=>{
-editing=null;
-render();
-};
-
-f.onsubmit=async e=>{
-e.preventDefault();
-
-const btn=$('savebtn');
-btn.disabled=true;
-
-const values={site_id:site};
-
-for(const [k,label,type] of sp.fields){
-const v=f.elements[k].value;
-
-if(v!==''){
-values[k]=type==='number'?Number(v):v;
-}else if(editing&&tab==='workers'){
-values[k]=null;
-}
-}
-
-const wasEditing=tab==='workers'&&!!editing;
-
-const q=wasEditing
-?db.from('workers')
-.update(values)
-.eq('id',editing)
-.eq
+  const activeWorkers=workers.filter(w=>
+    w.is_active!==false&&w.is_deleted!==true
+  );
+
+  $('content').innerHTML=`
+    <h2>Bulk Attendance</h2>
+    <p class="muted">
+      सभी Workers की Attendance एक साथ भरें।
+    </p>
+
+    <label>Attendance Date
+      <input type="date" id="attDate" value="${today()}">
+    </label>
+
+    <div class="actions">
+      <button type="button" class="secondary" id="loadAtt">
+        Load Attendance
+      </button>
+      <button type="button" class="secondary" id="allPresent">
+        Mark All Present
+      </button>
+    </div>
+
+    <div id="attList"></div>
+
+    <div class="actions">
+      <button id="saveAll" type="button">
+        Save All Attendance
+      </button>
+    </div>
+
+    <p class="muted" id="attInfo"></p>
+  `;
+
+  const dateInput=$('attDate');
+  const list=$('attList');
+  const info=$('attInfo');
+  const save=$('saveAll');
+
+  let existing=new Map();
+  let loadedDate='';
+  let duplicates=0;
+
+  function setBusy(v){
+    save.disabled=v;
+    $('loadAtt').disabled=v;
+    $('allPresent').disabled=v;
+    dateInput.disabled=v;
+  }
+
+  function buildRows(){
+    if(!activeWorkers.length){
+      list.innerHTML='<p class="muted">No active workers</p>';
+      save.disabled=true;
+      return;
+    }
+
+    list.innerHTML=activeWorkers.map(w=>{
+      const a=existing.get(String(w.id));
+      const status=a?.status||'present';
+      const ot=Number(a?.overtime_hours||0);
+
+      return `<div class="att-row" data-worker="${esc(w.id)}">
+        <div class="att-name">
+          ${esc(w.full_name)}
+          <small>${a?'Saved attendance':'New attendance'}</small>
+        </div>
+
+        <label>Status
+          <select class="attStatus">
+            <option value="present" ${status==='present'?'selected':''}>
+              Present
+            </option>
+            <option value="absent" ${status==='absent'?'selected':''}>
+              Absent
+            </option>
+            <option value="half_day" ${status==='half_day'?'selected':''}>
+              Half Day
+            </option>
+            <option value="leave" ${status==='leave'?'selected':''}>
+              Leave
+            </option>
+          </select>
+        </label>
+
+        <label>OT Hours
+          <input class="attOT" type="number" min="0"
+            step="0.5" value="${ot}">
+        </label>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('.attStatus').forEach(s=>{
+      s.onchange=()=>{
+        const row=s.closest('.att-row');
+        if(s.value==='absent'||s.value==='leave'){
+          row.querySelector('.attOT').value=0;
+        }
+      };
+    });
+  }
+
+  async function loadAttendance(){
+    const date=dateInput.value;
+
+    if(!date){
+      msg('Attendance date चुनें');
+      return;
+    }
+
+    setBusy(true);
+    info.textContent='Attendance loading...';
+
+    try{
+      const {data,error}=await db
+        .from('worker_attendance')
+        .select('id,worker_id,status,overtime_hours')
+        .eq('site_id',site)
+        .eq('attendance_date',date)
+        .range(0,9999);
+
+      if(error) throw error;
+
+      if(data.length>=10000){
+        throw new Error('Too many attendance records');
+      }
+
+      existing=new Map();
+      duplicates=0;
+
+      for(const r of data){
+        const key=String(r.worker_id);
+        if(existing.has(key)) duplicates++;
+        else existing.set(key,r);
+      }
+
+      loadedDate=date;
+      buildRows();
+
+      info.textContent=
+        `${activeWorkers.length} Active Workers · ${data.length} Saved Entries`;
+
+      if(duplicates){
+        save.disabled=true;
+        msg(
+          'Duplicate Attendance मिली है। पहले duplicate records 
