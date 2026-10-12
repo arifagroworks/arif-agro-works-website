@@ -4,12 +4,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Arif Agro Works V5.7</title>
+<title>Arif Agro Works V5.8</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#071b28;color:#eef6fa;font-family:Arial,sans-serif}
 header{background:#103044;border-bottom:3px solid #ff752e;padding:16px;display:flex;justify-content:space-between;align-items:center}
 h2{font-size:20px;margin:0 0 12px}
+h3{font-size:17px}
 small,.muted{color:#abc3ce}
 main{max-width:900px;margin:18px auto;padding:0 12px}
 .box{background:#103044;border:1px solid #36596b;border-radius:13px;padding:15px;margin-bottom:14px}
@@ -27,18 +28,23 @@ button:disabled{opacity:.5}
 .card small{display:block;margin:5px 0}
 #notice,#loginMsg{white-space:pre-wrap;overflow-wrap:anywhere;color:#ffccaa;margin:12px 0;font-size:13px}
 .att{border-bottom:1px solid #36596b;padding:10px 0}
-.report-table{width:100%;border-collapse:collapse;font-size:12px}
-.report-table th,.report-table td{border:1px solid #36596b;padding:9px 5px;text-align:center}
-.report-table th{background:#284b60}
-.report-wrap{overflow-x:auto}
-.report-table td:first-child,.report-table th:first-child{text-align:left}
+.wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border:1px solid #36596b;padding:9px 5px;text-align:center}
+th{background:#284b60}
+th:first-child,td:first-child{text-align:left}
+.slip{background:#fff;color:#111;padding:20px;border-radius:8px;margin-top:12px}
+.slip h2,.slip h3{text-align:center}
+.slip table th{background:#eee;color:#111}
+.slip table td,.slip table th{border-color:#aaa}
+.slip .muted{color:#555}
 footer{text-align:center;color:#abc3ce;font-size:12px;padding:20px}
 </style>
 </head>
 <body>
 <header>
 <div><b>ARIF <span style="color:#ff752e">AGRO</span> WORKS</b><br>
-<small>PRIVATE MANAGEMENT PORTAL · V5.7</small></div>
+<small>PRIVATE MANAGEMENT PORTAL · V5.8</small></div>
 <button id="logout" class="alt hide">Logout</button>
 </header>
 <main>
@@ -62,7 +68,6 @@ footer{text-align:center;color:#abc3ce;font-size:12px;padding:20px}
 <div id="notice"></div>
 </main>
 <footer>Authorized access only · Arif Agro Works</footer>
-
 <script>
 const $=id=>document.getElementById(id);
 const notice=t=>$('notice').textContent=String(t);
@@ -77,6 +82,8 @@ const tabs=[
 ['summary','Salary Summary'],
 ['attendance','Attendance'],
 ['report','Monthly Report'],
+['slip','Salary Slip'],
+['food','Food Deduction'],
 ['advances','Advances'],
 ['expenses','Expenses'],
 ['salary','Salary Payments'],
@@ -89,10 +96,8 @@ expenses:['site_expenses',[['expense_date','Date','date',1],['category','Categor
 salary:['worker_salary_payments',[['worker_id','Worker','worker',1],['payment_date','Date','date',1],['period_start','Period From','date'],['period_end','Period To','date'],['amount','Amount','number',1],['notes','Notes','text']]],
 ledger:['site_cash_ledger',[['entry_date','Date','date',1],['entry_type','Type','cash',1],['category','Category','text',1],['description','Description','text'],['amount','Amount','number',1]]]
 };
-
 window.onerror=(m,s,l)=>info('JavaScript Error line '+l+': '+m);
 window.onunhandledrejection=e=>notice('Error: '+(e.reason?.message||e.reason));
-
 function loadLibrary(){
 const urls=[
 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
@@ -111,7 +116,6 @@ s.src=urls[i++];document.head.appendChild(s);
 }
 next();
 }
-
 async function start(){
 try{
 db=window.supabase.createClient(
@@ -125,24 +129,20 @@ let r=await wait(db.auth.getSession());
 if(r.data?.session)await init();
 }catch(e){info('Startup Error: '+e.message)}
 }
-
 $('loginForm').onsubmit=async e=>{
 e.preventDefault();
 let b=$('loginBtn');
-b.disabled=true;
-b.textContent='Logging in...';
+b.disabled=true;b.textContent='Logging in...';
 info('Checking credentials...');
 try{
 let r=await wait(db.auth.signInWithPassword({
-email:$('email').value.trim(),
-password:$('password').value
+email:$('email').value.trim(),password:$('password').value
 }));
 if(r.error)throw r.error;
 await init();
 }catch(x){info('Login Error: '+x.message)}
 finally{b.disabled=false;b.textContent='Secure Login'}
 };
-
 $('logout').onclick=async()=>{
 await db.auth.signOut();
 $('app').classList.add('hide');
@@ -150,11 +150,7 @@ $('login').classList.remove('hide');
 $('logout').classList.add('hide');
 info('Logged out');
 };
-
-$('site').onchange=()=>{
-edit=null;deleted=false;render();
-};
-
+$('site').onchange=()=>{edit=null;deleted=false;render()};
 async function init(){
 let u=await wait(db.auth.getUser());
 if(u.error)throw u.error;
@@ -170,10 +166,8 @@ $('site').innerHTML=sites.map(x=>`<option value="${esc(x.id)}">${esc(x.site_name
 $('login').classList.add('hide');
 $('app').classList.remove('hide');
 $('logout').classList.remove('hide');
-await render();
-notice('Portal ready');
+await render();notice('Portal ready');
 }
-
 function field(f){
 let [k,name,type,req]=f,v='';
 if(type==='worker')
@@ -186,11 +180,10 @@ else
 v=`<input name="${k}" type="${type}" ${req?'required':''} ${type==='number'?'min="0" step="0.01"':''} ${type==='date'?'value="'+date()+'"':''}>`;
 return `<label>${name}${req?' *':''}${v}</label>`;
 }
-
 async function render(){
 let n=++seq,site=$('site').value;
 if(!site){$('content').textContent='No assigned sites';return}
-let allowed=tabs.filter(x=>role==='master'||!['summary','salary','ledger'].includes(x[0]));
+let allowed=tabs.filter(x=>role==='master'||!['summary','slip','salary','ledger'].includes(x[0]));
 if(!allowed.some(x=>x[0]===tab))tab='workers';
 $('tabs').innerHTML=allowed.map(x=>`<button data-tab="${x[0]}" class="${tab===x[0]?'active':''}">${x[1]}</button>`).join('');
 $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
@@ -203,6 +196,8 @@ workers=w.data||[];
 if(tab==='summary')return summary(site);
 if(tab==='attendance')return attendance(site);
 if(tab==='report')return monthlyReport(site);
+if(tab==='slip')return salarySlip(site);
+if(tab==='food')return foodDeduction(site);
 let [table,fields]=config[tab];
 let order=tab==='workers'?'created_at':(fields.find(f=>f[2]==='date')||['created_at'])[0];
 let r=await db.from(table).select('*').eq('site_id',site).order(order,{ascending:false}).limit(100);
@@ -231,8 +226,7 @@ else{
 form.innerHTML=fields.map(field).join('')+'<div class="actions"><button id="save">Save Entry</button><button type="button" class="alt" id="cancel">Cancel Edit</button></div>';
 $('cancel').onclick=()=>{edit=null;render()};
 form.onsubmit=async e=>{
-e.preventDefault();
-$('save').disabled=true;
+e.preventDefault();$('save').disabled=true;
 let data={site_id:site};
 fields.forEach(([k,,type])=>{
 let v=form.elements[k].value;
@@ -246,16 +240,13 @@ let q=edit&&tab==='workers'
 let r=await q;
 if(r.error)throw r.error;
 if(!r.data?.length)throw Error('Permission denied');
-edit=null;
-await render();
-notice('Saved successfully');
+edit=null;await render();notice('Saved successfully');
 }catch(e){notice('Save Error: '+e.message);$('save').disabled=false}
 };
 }
 if(tab!=='workers'||role!=='master')return;
 $('rows').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{
-let x=rows.find(r=>String(r.id)===b.dataset.edit);
-edit=x.id;
+let x=rows.find(r=>String(r.id)===b.dataset.edit);edit=x.id;
 fields.forEach(([k])=>{if(form.elements[k])form.elements[k].value=x[k]??''});
 $('formTitle').textContent='Edit '+x.full_name;
 $('save').textContent='Update Worker';
@@ -275,34 +266,14 @@ if(!confirm((restoring?'Restore ':'Delete from list: ')+x.full_name+'?'))return;
 let data=restoring?{is_deleted:false,deleted_at:null}:{is_deleted:true,deleted_at:new Date().toISOString()};
 let r=await db.from('workers').update(data).eq('id',id).eq('site_id',site).eq('is_deleted',restoring).select('id');
 if(r.error||!r.data?.length){notice(r.error?.message||'Update denied');return}
-await render();
-notice(restoring?'Restored':'Deleted from list; history kept');
+await render();notice(restoring?'Restored':'Deleted from list; history kept');
 });
 }
 
-async function summary(site){
-let d=date();
-$('content').innerHTML=`<h2>Salary Summary</h2>
-<label>Worker<select id="sw"><option value="all">All Workers</option></select></label>
-<div class="grid">
-<label>From<input type="date" id="sf" value="${d.slice(0,7)}-01"></label>
-<label>To<input type="date" id="st" value="${d}"></label>
-</div>
-<button id="calc">Calculate Salary</button>
-<p class="muted">Present = 1 day, Half Day = 0.5, Absent/Leave = 0. Current wage rates apply.</p>
-<div id="results"></div>`;
-let r=await db.from('workers').select('id,full_name,daily_wage,overtime_rate,is_deleted').eq('site_id',site).order('full_name');
-if(r.error){notice(r.error.message);return}
-let list=r.data||[];
-$('sw').innerHTML='<option value="all">All Workers</option>'+list.map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}${w.is_deleted?' (Archived)':''}</option>`).join('');
-$('sw').onchange=()=>$('results').innerHTML='';
-$('calc').onclick=async()=>{
-let from=$('sf').value,to=$('st').value,id=$('sw').value;
-if(!from||!to||from>to){notice('Select valid dates');return}
-$('calc').disabled=true;notice('Calculating...');
-try{
+/* Shared salary calculation */
+async function salaryData(site,from,to,id='all'){
 let q1=db.from('worker_attendance').select('worker_id,status,overtime_hours').eq('site_id',site).gte('attendance_date',from).lte('attendance_date',to);
-let q2=db.from('worker_advances').select('worker_id,amount').eq('site_id',site).gte('advance_date',from).lte('advance_date',to);
+let q2=db.from('worker_advances').select('worker_id,amount,notes').eq('site_id',site).gte('advance_date',from).lte('advance_date',to);
 let q3=db.from('worker_salary_payments').select('worker_id,amount').eq('site_id',site).gte('payment_date',from).lte('payment_date',to);
 if(id!=='all'){
 q1=q1.eq('worker_id',id);
@@ -314,26 +285,69 @@ for(let r of [a,b,c]){
 if(r.error)throw r.error;
 if(r.data.length===10000)throw Error('Use shorter date range');
 }
-let sum=(rows,w,k)=>rows.filter(x=>String(x.worker_id)===String(w)).reduce((n,x)=>n+Number(x[k]||0),0);
-let total=0;
-$('results').innerHTML=list.filter(w=>id==='all'||String(w.id)===id).map(w=>{
-let records=a.data.filter(x=>String(x.worker_id)===String(w.id));
-let days=records.reduce((n,x)=>n+(x.status==='present'?1:x.status==='half_day'?.5:0),0);
-let ot=sum(records,w.id,'overtime_hours');
+return {attendance:a.data,advances:b.data,payments:c.data};
+}
+function calculateWorker(w,data){
+let match=x=>String(x.worker_id)===String(w.id);
+let att=data.attendance.filter(match);
+let adv=data.advances.filter(match);
+let pay=data.payments.filter(match);
+let days=att.reduce((n,x)=>n+(x.status==='present'?1:x.status==='half_day'?0.5:0),0);
+let ot=att.reduce((n,x)=>n+Number(x.overtime_hours||0),0);
 let wage=days*Number(w.daily_wage||0);
 let otPay=ot*Number(w.overtime_rate||0);
-let adv=sum(b.data,w.id,'amount');
-let paid=sum(c.data,w.id,'amount');
-let due=wage+otPay-adv-paid;
-total+=due;
-return `<div class="card"><b>${esc(w.full_name)}</b><small>Paid Days: ${days} · OT: ${ot} hours</small><small>Wage ${cash(wage)} + OT ${cash(otPay)} − Advance ${cash(adv)} − Paid ${cash(paid)}</small><b>Balance: ${cash(due)}</b></div>`;
+let food=adv.filter(x=>String(x.notes||'').trim().toUpperCase().startsWith('FOOD:'))
+.reduce((n,x)=>n+Number(x.amount||0),0);
+let advance=adv.filter(x=>!String(x.notes||'').trim().toUpperCase().startsWith('FOOD:'))
+.reduce((n,x)=>n+Number(x.amount||0),0);
+let paid=pay.reduce((n,x)=>n+Number(x.amount||0),0);
+let gross=wage+otPay;
+let due=gross-advance-food-paid;
+return {days,ot,wage,otPay,food,advance,paid,gross,due};
+}
+async function fullWorkers(site){
+let r=await db.from('workers').select('id,full_name,daily_wage,overtime_rate,is_deleted').eq('site_id',site).order('full_name');
+if(r.error)throw r.error;
+return r.data||[];
+}
+function workerOptions(list,all=false){
+return (all?'<option value="all">All Workers</option>':'<option value="">Select Worker</option>')+
+list.map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}${w.is_deleted?' (Archived)':''}</option>`).join('');
+}
+async function summary(site){
+let d=date();
+$('content').innerHTML=`<h2>Salary Summary</h2>
+<label>Worker<select id="sw"></select></label>
+<div class="grid">
+<label>From<input type="date" id="sf" value="${d.slice(0,7)}-01"></label>
+<label>To<input type="date" id="st" value="${d}"></label>
+</div>
+<button id="calc">Calculate Salary</button>
+<p class="muted">Present = 1, Half Day = 0.5. Current wage rates apply. Food is deducted only once.</p>
+<div id="results"></div>`;
+try{
+let list=await fullWorkers(site);
+$('sw').innerHTML=workerOptions(list,true);
+$('calc').onclick=async()=>{
+let from=$('sf').value,to=$('st').value,id=$('sw').value;
+if(!from||!to||from>to){notice('Select valid dates');return}
+$('calc').disabled=true;notice('Calculating...');
+try{
+let data=await salaryData(site,from,to,id),total=0;
+$('results').innerHTML=list.filter(w=>id==='all'||String(w.id)===id).map(w=>{
+let x=calculateWorker(w,data);total+=x.due;
+return `<div class="card"><b>${esc(w.full_name)}</b>
+<small>Paid Days: ${x.days} · OT: ${x.ot} hours</small>
+<small>Wages ${cash(x.wage)} + OT ${cash(x.otPay)}</small>
+<small>Advance ${cash(x.advance)} · Food ${cash(x.food)} · Salary Paid ${cash(x.paid)}</small>
+<b>Balance: ${cash(x.due)}</b></div>`;
 }).join('')+`<div class="card"><b>Total Balance: ${cash(total)}</b></div>`;
 notice('Calculation complete');
 }catch(e){notice('Salary Error: '+e.message)}
 finally{$('calc').disabled=false}
 };
+}catch(e){notice('Salary Error: '+e.message)}
 }
-
 async function attendance(site){
 let active=workers.filter(w=>!w.is_deleted&&w.is_active!==false);
 $('content').innerHTML=`<h2>Bulk Attendance</h2>
@@ -342,8 +356,7 @@ $('content').innerHTML=`<h2>Bulk Attendance</h2>
 <button id="load" class="alt">Load Attendance</button>
 <button id="present" class="alt">Mark All Present</button>
 </div>
-<div id="alist"></div>
-<button id="saveAtt" disabled>Save All Attendance</button>`;
+<div id="alist"></div><button id="saveAtt" disabled>Save All Attendance</button>`;
 let saved=new Map(),loaded='',duplicates=false;
 async function load(){
 loaded='';$('saveAtt').disabled=true;
@@ -355,29 +368,23 @@ if(r.data.length===10000)throw Error('Too many records');
 saved=new Map();duplicates=false;
 r.data.forEach(x=>{
 let k=String(x.worker_id);
-if(saved.has(k))duplicates=true;
-else saved.set(k,x);
+if(saved.has(k))duplicates=true;else saved.set(k,x);
 });
 $('alist').innerHTML=active.map(w=>{
 let x=saved.get(String(w.id)),s=x?.status||'present';
 return `<div class="att" data-id="${esc(w.id)}"><b>${esc(w.full_name)}</b><div class="grid">
 <label>Status<select class="as">${[['present','Present'],['absent','Absent'],['half_day','Half Day'],['leave','Leave']].map(([v,n])=>`<option value="${v}" ${s===v?'selected':''}>${n}</option>`).join('')}</select></label>
-<label>OT Hours<input class="ao" type="number" min="0" step="0.5" value="${Number(x?.overtime_hours||0)}"></label>
-</div></div>`;
+<label>OT Hours<input class="ao" type="number" min="0" step="0.5" value="${Number(x?.overtime_hours||0)}"></label></div></div>`;
 }).join('');
 $('alist').querySelectorAll('.as').forEach(s=>s.onchange=()=>{
 if(['absent','leave'].includes(s.value))s.closest('.att').querySelector('.ao').value=0;
 });
-loaded=day;
-$('saveAtt').disabled=duplicates||!active.length;
+loaded=day;$('saveAtt').disabled=duplicates||!active.length;
 notice(duplicates?'Duplicate attendance found; saving disabled':'Attendance loaded: '+day);
 }catch(e){notice('Load Error: '+e.message)}
 }
 $('load').onclick=load;
-$('ad').onchange=()=>{
-loaded='';$('saveAtt').disabled=true;
-$('alist').innerHTML='Press Load Attendance';
-};
+$('ad').onchange=()=>{loaded='';$('saveAtt').disabled=true;$('alist').innerHTML='Press Load Attendance'};
 $('present').onclick=()=>{
 $('alist').querySelectorAll('.as').forEach(s=>s.value='present');
 notice('Marked Present; press Save All');
@@ -391,146 +398,198 @@ return {id:x.dataset.id,status:s,ot:['absent','leave'].includes(s)?0:ot};
 });
 if(entries.some(x=>!Number.isFinite(x.ot)||x.ot<0)){notice('Invalid OT');return}
 if(!confirm('Save '+entries.length+' workers attendance for '+loaded+'?'))return;
-$('saveAtt').disabled=true;
-let ok=0,errors=[];
+$('saveAtt').disabled=true;let ok=0,errors=[];
 for(let x of entries){
 let old=saved.get(String(x.id));
 let r=old
 ?await db.from('worker_attendance').update({status:x.status,overtime_hours:x.ot}).eq('id',old.id).eq('site_id',site).select('id')
 :await db.from('worker_attendance').insert({site_id:site,worker_id:x.id,attendance_date:loaded,status:x.status,overtime_hours:x.ot}).select('id');
-if(r.error||!r.data?.length)errors.push(r.error?.message||'Permission denied');
-else ok++;
+if(r.error||!r.data?.length)errors.push(r.error?.message||'Permission denied');else ok++;
 }
 notice(ok+' Saved; '+errors.length+' Failed'+(errors.length?'\n'+errors.slice(0,3).join('\n'):''));
 if(!errors.length)await load();
 };
 await load();
 }
-
-/* V5.7 NEW FEATURE: MONTHLY ATTENDANCE REPORT */
 async function monthlyReport(site){
 let month=date().slice(0,7);
-$('content').innerHTML=`
-<h2>Monthly Attendance Report</h2>
-<p class="muted">Worker-wise monthly attendance and overtime report.</p>
+$('content').innerHTML=`<h2>Monthly Attendance Report</h2>
 <div class="grid">
 <label>Month<input id="rm" type="month" value="${month}"></label>
-<label>Worker<select id="rw"><option value="all">All Workers</option></select></label>
+<label>Worker<select id="rw"></select></label>
 </div>
-<div class="actions">
 <button id="runReport">Generate Report</button>
-<button id="printReport" class="alt" style="display:none">Print / Save PDF</button>
-</div>
 <div id="reportResult"></div>`;
-let w=await db.from('workers')
-.select('id,full_name,is_deleted')
-.eq('site_id',site)
-.order('full_name');
-if(w.error){notice('Report Error: '+w.error.message);return}
-let list=w.data||[];
-$('rw').innerHTML='<option value="all">All Workers</option>'+
-list.map(x=>`<option value="${esc(x.id)}">${esc(x.full_name)}${x.is_deleted?' (Archived)':''}</option>`).join('');
+try{
+let list=await fullWorkers(site);
+$('rw').innerHTML=workerOptions(list,true);
 $('runReport').onclick=async()=>{
 let m=$('rm').value,id=$('rw').value;
 if(!/^\d{4}-\d{2}$/.test(m)){notice('Select valid month');return}
-let from=m+'-01';
 let [year,mo]=m.split('-').map(Number);
-let to=new Date(Date.UTC(year,mo,0)).toISOString().slice(0,10);
-let chosen=list.filter(x=>id==='all'||String(x.id)===id);
-$('runReport').disabled=true;
-$('printReport').style.display='none';
-$('reportResult').innerHTML='<p>Loading report...</p>';
-notice('Generating monthly report...');
+let from=m+'-01',to=new Date(Date.UTC(year,mo,0)).toISOString().slice(0,10);
+$('runReport').disabled=true;notice('Generating report...');
 try{
 let records=[],offset=0;
 while(true){
-let q=db.from('worker_attendance')
-.select('worker_id,attendance_date,status,overtime_hours')
-.eq('site_id',site)
-.gte('attendance_date',from)
-.lte('attendance_date',to)
-.order('attendance_date')
-.range(offset,offset+999);
+let q=db.from('worker_attendance').select('worker_id,attendance_date,status,overtime_hours')
+.eq('site_id',site).gte('attendance_date',from).lte('attendance_date',to)
+.order('attendance_date').range(offset,offset+999);
 if(id!=='all')q=q.eq('worker_id',id);
-let r=await q;
-if(r.error)throw r.error;
-records.push(...(r.data||[]));
+let r=await q;if(r.error)throw r.error;
+records.push(...r.data);
 if(r.data.length<1000)break;
 offset+=1000;
-if(offset>=20000)throw Error('Too many records; contact administrator');
+if(offset>=20000)throw Error('Too many records');
 }
-let totals={present:0,absent:0,half_day:0,leave:0,paid:0,ot:0,recorded:0};
-let reportRows=chosen.map(worker=>{
-let a=records.filter(x=>String(x.worker_id)===String(worker.id));
-let s={present:0,absent:0,half_day:0,leave:0,ot:0};
-a.forEach(x=>{
-if(Object.prototype.hasOwnProperty.call(s,x.status)&&x.status!=='ot')s[x.status]++;
-s.ot+=Number(x.overtime_hours||0);
-});
-let paid=s.present+s.half_day*0.5;
-totals.present+=s.present;
-totals.absent+=s.absent;
-totals.half_day+=s.half_day;
-totals.leave+=s.leave;
-totals.paid+=paid;
-totals.ot+=s.ot;
-totals.recorded+=a.length;
-return `<tr>
-<td>${esc(worker.full_name)}</td>
-<td>${s.present}</td>
-<td>${s.absent}</td>
-<td>${s.half_day}</td>
-<td>${s.leave}</td>
-<td><b>${paid}</b></td>
-<td>${Number(s.ot.toFixed(2))}</td>
-</tr>`;
+let total={p:0,a:0,h:0,l:0,days:0,ot:0};
+let rows=list.filter(w=>id==='all'||String(w.id)===id).map(w=>{
+let a=records.filter(x=>String(x.worker_id)===String(w.id));
+let p=a.filter(x=>x.status==='present').length;
+let ab=a.filter(x=>x.status==='absent').length;
+let h=a.filter(x=>x.status==='half_day').length;
+let l=a.filter(x=>x.status==='leave').length;
+let days=p+h*.5,ot=a.reduce((n,x)=>n+Number(x.overtime_hours||0),0);
+total.p+=p;total.a+=ab;total.h+=h;total.l+=l;total.days+=days;total.ot+=ot;
+return `<tr><td>${esc(w.full_name)}</td><td>${p}</td><td>${ab}</td><td>${h}</td><td>${l}</td><td>${days}</td><td>${ot}</td></tr>`;
 }).join('');
-let siteName=sites.find(x=>String(x.id)===String(site))?.site_name||'Site';
-let html=`
-<div class="card">
-<b>${esc(siteName)} · ${esc(m)}</b>
-<small>Workers: ${chosen.length} · Saved Attendance Records: ${totals.recorded}</small>
-<small>Paid Days: ${totals.paid} · Total OT: ${Number(totals.ot.toFixed(2))} hours</small>
+$('reportResult').innerHTML=`<div class="card"><b>${esc(m)} · Monthly Attendance</b></div>
+<div class="wrap"><table><thead><tr><th>Worker</th><th>P</th><th>A</th><th>H</th><th>L</th><th>Paid Days</th><th>OT</th></tr></thead>
+<tbody>${rows}<tr><th>Total</th><th>${total.p}</th><th>${total.a}</th><th>${total.h}</th><th>${total.l}</th><th>${total.days}</th><th>${Number(total.ot.toFixed(2))}</th></tr></tbody></table></div>
+<p class="muted">Only saved attendance counts. Missing days are not automatically Absent.</p>`;
+notice('Monthly report ready');
+}catch(e){notice('Report Error: '+e.message)}
+finally{$('runReport').disabled=false}
+};
+}catch(e){notice('Report Error: '+e.message)}
+}
+
+/* V5.8 FOOD DEDUCTION */
+async function foodDeduction(site){
+$('content').innerHTML=`<h2>Food Deduction</h2>
+<p class="muted">Food deduction is stored in Advances with FOOD: notes. Do not enter the same amount again in Advances.</p>
+<form id="foodForm">
+<label>Worker<select id="fw" required></select></label>
+<div class="grid">
+<label>Date<input id="fd" type="date" value="${date()}" required></label>
+<label>Amount ₹<input id="fa" type="number" min="0.01" step="0.01" required></label>
 </div>
-<div class="report-wrap">
-<table class="report-table">
-<thead><tr>
-<th>Worker</th><th>P</th><th>A</th><th>H</th><th>L</th><th>Paid Days</th><th>OT Hours</th>
-</tr></thead>
-<tbody>
-${reportRows||'<tr><td colspan="7">No workers found</td></tr>'}
-<tr>
-<th>Total</th>
-<th>${totals.present}</th>
-<th>${totals.absent}</th>
-<th>${totals.half_day}</th>
-<th>${totals.leave}</th>
-<th>${totals.paid}</th>
-<th>${Number(totals.ot.toFixed(2))}</th>
-</tr>
-</tbody></table></div>
-<p class="muted">P = Present, A = Absent, H = Half Day, L = Leave. Paid Days = Present + Half Day × 0.5.</p>
-<p class="muted">Only saved attendance is counted. Missing dates are not automatically marked Absent. OT is counted from saved records.</p>`;
-$('reportResult').innerHTML=html;
-$('printReport').style.display='inline-block';
-$('printReport').onclick=()=>{
+<label>Food Details<input id="fn" type="text" placeholder="Meals / Canteen"></label>
+<button id="foodSave">Save Food Deduction</button>
+</form>
+<h3>Recent Food Deductions</h3>
+<div id="foodList"></div>`;
+let active=workers.filter(w=>!w.is_deleted&&w.is_active!==false);
+$('fw').innerHTML=workerOptions(active);
+async function loadFood(){
+let r=await db.from('worker_advances').select('worker_id,advance_date,amount,notes')
+.eq('site_id',site).order('advance_date',{ascending:false}).limit(500);
+if(r.error){notice('Food List Error: '+r.error.message);return}
+let foods=r.data.filter(x=>String(x.notes||'').trim().toUpperCase().startsWith('FOOD:'));
+$('foodList').innerHTML=foods.length?foods.map(x=>{
+let name=workers.find(w=>String(w.id)===String(x.worker_id))?.full_name||'Worker';
+return `<div class="card"><b>${esc(name)}</b><small>${esc(x.advance_date)} · ${cash(x.amount)} · ${esc(x.notes)}</small></div>`;
+}).join(''):'<p class="muted">No food deductions found in recent entries.</p>';
+}
+$('foodForm').onsubmit=async e=>{
+e.preventDefault();
+let worker=$('fw').value,amount=Number($('fa').value);
+if(!worker||!Number.isFinite(amount)||amount<=0){notice('Enter valid worker and amount');return}
+if(!confirm('Save food deduction '+cash(amount)+'?'))return;
+$('foodSave').disabled=true;
+try{
+let details=$('fn').value.trim();
+let r=await db.from('worker_advances').insert({
+site_id:site,
+worker_id:worker,
+advance_date:$('fd').value,
+amount:amount,
+notes:'FOOD: '+(details||'Meals')
+}).select('worker_id');
+if(r.error)throw r.error;
+if(!r.data?.length)throw Error('Permission denied');
+$('fa').value='';$('fn').value='';
+await loadFood();
+notice('Food deduction saved');
+}catch(e){notice('Food Error: '+e.message)}
+finally{$('foodSave').disabled=false}
+};
+await loadFood();
+}
+
+/* V5.8 SALARY SLIP */
+async function salarySlip(site){
+let d=date();
+$('content').innerHTML=`<h2>Worker Salary Slip</h2>
+<label>Worker<select id="slw"></select></label>
+<div class="grid">
+<label>From<input id="slf" type="date" value="${d.slice(0,7)}-01"></label>
+<label>To<input id="slt" type="date" value="${d}"></label>
+</div>
+<div class="actions">
+<button id="makeSlip">Generate Salary Slip</button>
+<button id="printSlip" class="alt hide">Print / Save PDF</button>
+</div>
+<div id="slipResult"></div>
+<p class="muted">Salary is calculated using current daily wage and OT rate. Advances, Food and payments are counted by transaction date within the selected period.</p>`;
+try{
+let list=await fullWorkers(site);
+$('slw').innerHTML=workerOptions(list);
+$('makeSlip').onclick=async()=>{
+let id=$('slw').value,from=$('slf').value,to=$('slt').value;
+if(!id||!from||!to||from>to){notice('Select worker and valid dates');return}
+$('makeSlip').disabled=true;
+$('printSlip').classList.add('hide');
+$('slipResult').innerHTML='';
+notice('Preparing salary slip...');
+try{
+let w=list.find(x=>String(x.id)===id);
+if(!w)throw Error('Worker not found');
+let data=await salaryData(site,from,to,id);
+let x=calculateWorker(w,data);
+let siteName=sites.find(s=>String(s.id)===String(site))?.site_name||'Site';
+$('slipResult').innerHTML=`<div class="slip" id="slipPaper">
+<h2>ARIF AGRO WORKS</h2>
+<h3>WORKER SALARY SLIP</h3>
+<p><b>Site:</b> ${esc(siteName)}</p>
+<p><b>Worker:</b> ${esc(w.full_name)}</p>
+<p><b>Period:</b> ${esc(from)} to ${esc(to)}</p>
+<div class="wrap"><table>
+<tr><th>Description</th><th>Amount / Value</th></tr>
+<tr><td>Daily Wage</td><td>${cash(w.daily_wage)}</td></tr>
+<tr><td>Paid Attendance Days</td><td>${x.days}</td></tr>
+<tr><td>Wages</td><td>${cash(x.wage)}</td></tr>
+<tr><td>Overtime Hours</td><td>${x.ot}</td></tr>
+<tr><td>Overtime Rate</td><td>${cash(w.overtime_rate)}</td></tr>
+<tr><td>Overtime Amount</td><td>${cash(x.otPay)}</td></tr>
+<tr><th>Gross Salary</th><th>${cash(x.gross)}</th></tr>
+<tr><td>Advance Deduction</td><td>− ${cash(x.advance)}</td></tr>
+<tr><td>Food Deduction</td><td>− ${cash(x.food)}</td></tr>
+<tr><td>Salary Already Paid</td><td>− ${cash(x.paid)}</td></tr>
+<tr><th>Balance Payable</th><th>${cash(x.due)}</th></tr>
+</table></div>
+<p class="muted">Generated: ${esc(date())}</p>
+<p class="muted">Computer-generated salary calculation. Verify before payment.</p>
+</div>`;
+$('printSlip').classList.remove('hide');
+notice('Salary slip ready');
+}catch(e){notice('Slip Error: '+e.message)}
+finally{$('makeSlip').disabled=false}
+};
+$('printSlip').onclick=()=>{
+let slip=$('slipPaper');
+if(!slip)return;
 let win=window.open('','_blank');
-if(!win){notice('Allow pop-ups to print the report');return}
-win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Monthly Attendance ${esc(m)}</title>
-<style>body{font-family:Arial;padding:20px;color:#111}.card{margin:12px 0;padding:10px;border:1px solid #aaa}.card small{display:block;margin:5px 0}table{border-collapse:collapse;width:100%}th,td{border:1px solid #777;padding:7px;text-align:center;font-size:12px}th:first-child,td:first-child{text-align:left}.muted{font-size:12px;color:#555}</style>
-</head><body><h2>ARIF AGRO WORKS</h2><h3>Monthly Attendance Report</h3>${html}</body></html>`);
+if(!win){notice('Allow pop-ups in Chrome to print');return}
+win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salary Slip</title>
+<style>body{font-family:Arial;color:#111;padding:20px}.slip{max-width:750px;margin:auto}h2,h3{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #888;padding:9px;text-align:left}th{background:#eee}.muted{color:#555;font-size:12px}</style>
+</head><body>${slip.outerHTML}</body></html>`);
 win.document.close();
 win.focus();
 setTimeout(()=>win.print(),500);
 };
-notice('Monthly report ready');
-}catch(e){
-$('reportResult').innerHTML='';
-notice('Report Error: '+e.message);
-}finally{$('runReport').disabled=false}
-};
+}catch(e){notice('Slip Error: '+e.message)}
 }
-
 loadLibrary();
 </script>
 </body>
