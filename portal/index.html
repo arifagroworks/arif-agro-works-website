@@ -1,9 +1,10 @@
+
 <!doctype html>
 <html lang="hi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arif Agro Works | Portal V3</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arif Agro Works | Portal V4</title>
 <style>
 :root{font-family:system-ui,sans-serif;color:#edf5f8;background:#071b28}
 *{box-sizing:border-box}
@@ -20,6 +21,7 @@ label{display:block;font-size:13px;color:#c8dce5;margin:9px 0}
 input,select,textarea{display:block;width:100%;background:#071e2d;color:#fff;border:1px solid #547083;border-radius:8px;padding:11px;margin-top:5px;font-size:16px}
 button{background:#ff752e;color:#102330;border:0;border-radius:9px;padding:11px 13px;font-weight:700;cursor:pointer}
 button.secondary{background:#22465a;color:white;border:1px solid #607f91}
+button.danger{background:#a73b40;color:white}
 button:disabled{opacity:.6}
 .hide{display:none!important}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
@@ -37,7 +39,7 @@ footer{text-align:center;color:#91aeba;padding:20px;font-size:12px}
 <header>
 <div>
 <h1>ARIF <b>AGRO</b> WORKS</h1>
-<small>PRIVATE MANAGEMENT PORTAL · V3</small>
+<small>PRIVATE MANAGEMENT PORTAL · V4</small>
 </div>
 <button class="secondary hide" id="logout">Logout</button>
 </header>
@@ -45,8 +47,8 @@ footer{text-align:center;color:#91aeba;padding:20px;font-size:12px}
 <main>
 <section class="panel" id="login">
 <h2>Master / Incharge Login</h2>
-<label>Email<input id="email" type="email"></label>
-<label>Password<input id="password" type="password"></label>
+<label>Email<input id="email" type="email" autocomplete="username"></label>
+<label>Password<input id="password" type="password" autocomplete="current-password"></label>
 <button id="signin">Secure Login</button>
 </section>
 
@@ -58,7 +60,6 @@ footer{text-align:center;color:#91aeba;padding:20px;font-size:12px}
 </section>
 <section class="panel" id="content"></section>
 </section>
-
 <p id="status" role="status"></p>
 </main>
 
@@ -79,7 +80,8 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({
 const hide=(id,v)=>$(id).classList.toggle('hide',v);
 const msg=s=>$('status').textContent=s;
 
-let db,role,sites=[],workers=[],tab='workers',editing=null;
+let db,role,sites=[],workers=[],tab='workers';
+let editing=null,showDeleted=false,renderVersion=0;
 
 const modules=[
 ['workers','Workers'],
@@ -149,7 +151,9 @@ fields:[
 };
 
 try{
-db=window.supabase.createClient(URL,KEY);
+db=window.supabase.createClient(URL,KEY,{
+auth:{persistSession:true,autoRefreshToken:true}
+});
 }catch(e){
 msg('Supabase library नहीं खुली');
 return;
@@ -168,6 +172,7 @@ else await init();
 $('logout').onclick=async()=>{
 await db.auth.signOut();
 role=null;
+editing=null;
 hide('login',false);
 hide('app',true);
 hide('logout',true);
@@ -176,13 +181,14 @@ msg('Logged out');
 
 $('site').onchange=()=>{
 editing=null;
+showDeleted=false;
 render();
 };
 
 async function init(){
-const {data:{user}}=await db.auth.getUser();
+const {data:{user},error:authError}=await db.auth.getUser();
 
-if(!user){
+if(authError||!user){
 hide('login',false);
 hide('app',true);
 hide('logout',true);
@@ -214,7 +220,6 @@ return;
 }
 
 sites=s||[];
-
 hide('login',true);
 hide('app',false);
 hide('logout',false);
@@ -222,7 +227,6 @@ hide('logout',false);
 $('who').textContent=(p.full_name||'Staff')+' · '+role;
 
 const previous=$('site').value;
-
 $('site').innerHTML=sites.map(s=>
 `<option value="${esc(s.id)}">${esc(s.site_name)}</option>`
 ).join('');
@@ -235,6 +239,7 @@ await render();
 }
 
 async function render(){
+const version=++renderVersion;
 const site=$('site').value;
 
 if(!site){
@@ -256,62 +261,90 @@ $('tabs').querySelectorAll('[data-tab]').forEach(b=>{
 b.onclick=()=>{
 tab=b.dataset.tab;
 editing=null;
+showDeleted=false;
 render();
 };
 });
 
 const {data:w,error:we}=await db
 .from('workers')
-.select('id,full_name,is_active')
+.select('id,full_name,is_active,is_deleted')
 .eq('site_id',site)
 .order('full_name');
 
+if(version!==renderVersion)return;
+
 if(we){
-msg(we.message);
+msg('Workers: '+we.message);
 return;
 }
 
 workers=w||[];
-
 const sp=spec[tab];
 
 const orderColumn=tab==='workers'
 ?'created_at'
 :(sp.fields.find(f=>f[2]==='date')||['created_at'])[0];
 
-const {data,error}=await db
-.from(sp.table)
+let query=db.from(sp.table)
 .select('*')
-.eq('site_id',site)
+.eq('site_id',site);
+
+if(tab==='workers'){
+query=query.eq('is_deleted',showDeleted);
+}
+
+const {data,error}=await query
 .order(orderColumn,{ascending:false})
 .limit(100);
+
+if(version!==renderVersion)return;
 
 if(error){
 msg(error.message);
 return;
 }
 
+const rows=data||[];
+
 $('content').innerHTML=`
 <h2>${esc(tabs.find(x=>x[0]===tab)?.[1])}</h2>
 <p class="muted">${esc(sites.find(s=>s.id===site)?.site_name)} · Latest 100 records</p>
+${tab==='workers'&&role==='master'
+? `<div class="actions">
+<button type="button" id="deletedToggle" class="secondary">
+${showDeleted?'Show Workers':'Deleted Workers'}
+</button>
+</div>` : ''}
 <div id="entries"></div>
-<h3 id="formtitle">नई Entry</h3>
+<h3 id="formtitle">${showDeleted&&tab==='workers'?'Deleted Workers':'नई Entry'}</h3>
 <form id="entry" class="grid"></form>
 `;
+
+const toggle=$('deletedToggle');
+if(toggle){
+toggle.onclick=()=>{
+showDeleted=!showDeleted;
+editing=null;
+render();
+};
+}
 
 const canWrite=role==='master'
 ||['workers','attendance','advances','expenses'].includes(tab);
 
 const f=$('entry');
 
-if(canWrite){
+if(tab==='workers'&&showDeleted){
+f.innerHTML='<p class="muted">Restore करने के लिए ऊपर Worker के सामने Restore दबाएँ।</p>';
+}else if(canWrite){
 f.innerHTML=sp.fields.map(([k,n,t,required])=>{
 let field;
 
 if(t==='worker'){
 field=`<select name="${k}" ${required?'required':''}>
 <option value="">Choose worker</option>
-${workers.filter(w=>w.is_active!==false).map(w=>
+${workers.filter(w=>w.is_active!==false&&w.is_deleted!==true).map(w=>
 `<option value="${esc(w.id)}">${esc(w.full_name)}</option>`
 ).join('')}
 </select>`;
@@ -346,18 +379,18 @@ e.preventDefault();
 
 const btn=$('savebtn');
 btn.disabled=true;
-
 const values={site_id:site};
 
 for(const [k,n,t] of sp.fields){
 const value=f.elements[k].value;
 if(value!==''){
 values[k]=t==='number'?Number(value):value;
+}else if(tab==='workers'&&editing){
+values[k]=null;
 }
 }
 
 const isEdit=tab==='workers'&&!!editing;
-
 let result;
 
 if(isEdit){
@@ -365,6 +398,7 @@ result=await db.from('workers')
 .update(values)
 .eq('id',editing)
 .eq('site_id',site)
+.eq('is_deleted',false)
 .select('id');
 }else{
 result=await db.from(sp.table)
@@ -380,7 +414,7 @@ return;
 }
 
 if(!result.data?.length){
-msg('Record save नहीं हुआ। Database permissions चेक करें।');
+msg('Record save नहीं हुआ। Permissions चेक करें।');
 return;
 }
 
@@ -393,12 +427,13 @@ $('cancelEdit').onclick=()=>{
 editing=null;
 render();
 };
+
 }else{
 f.innerHTML='<p>Only Master Admin can edit this section.</p>';
 }
 
-$('entries').innerHTML=(data||[]).length
-?data.map(r=>{
+$('entries').innerHTML=rows.length
+?rows.map(r=>{
 const name=r.full_name
 ||workers.find(w=>w.id===r.worker_id)?.full_name
 ||r.category||r.status||r.entry_type||'Entry';
@@ -410,17 +445,32 @@ const detail=Object.entries(r)
 .map(([k,v])=>k+': '+v)
 .join(' · ');
 
-const actions=tab==='workers'&&role==='master'
-?`<div class="actions">
+let actions='';
+
+if(tab==='workers'&&role==='master'){
+if(r.is_deleted===true){
+actions=`<div class="actions">
+<button class="secondary" data-restore="${esc(r.id)}">
+Restore Worker
+</button>
+</div>`;
+}else{
+actions=`<div class="actions">
 <button class="secondary" data-edit="${esc(r.id)}">Edit</button>
 <button class="secondary" data-toggle="${esc(r.id)}">
 ${r.is_active===false?'Reactivate':'Deactivate'}
 </button>
-</div>`:'';
+<button class="danger" data-delete="${esc(r.id)}">
+Delete from List
+</button>
+</div>`;
+}
+}
 
 return `<div class="item">
 <strong>${esc(name)}</strong>
-${tab==='workers'&&r.is_active===false?'<small>Inactive</small>':''}
+${tab==='workers'&&r.is_deleted===true?'<small>Removed from list</small>':''}
+${tab==='workers'&&r.is_deleted!==true&&r.is_active===false?'<small>Inactive</small>':''}
 <small>${esc(detail)}</small>
 ${actions}
 </div>`;
@@ -428,7 +478,6 @@ ${actions}
 :'<p class="muted">No entries yet</p>';
 
 if(tab==='workers'&&role==='master'){
-const rows=data||[];
 
 $('entries').querySelectorAll('[data-edit]').forEach(b=>{
 b.onclick=()=>{
@@ -438,13 +487,14 @@ if(!r)return;
 editing=r.id;
 
 for(const [k] of sp.fields){
-if(f.elements[k])f.elements[k].value=r[k]??'';
+if(f.elements[k]){
+f.elements[k].value=r[k]??'';
+}
 }
 
 $('formtitle').textContent='Edit Worker: '+r.full_name;
 $('savebtn').textContent='Update Worker';
 $('cancelEdit').classList.remove('hide');
-
 f.scrollIntoView({behavior:'smooth',block:'nearest'});
 msg('Editing '+r.full_name);
 };
@@ -466,7 +516,8 @@ const {data:updated,error:err}=await db.from('workers')
 .update({is_active:activate})
 .eq('id',r.id)
 .eq('site_id',site)
-.select('id,is_active');
+.eq('is_deleted',false)
+.select('id');
 
 if(err){
 b.disabled=false;
@@ -483,6 +534,51 @@ return;
 editing=null;
 await render();
 msg(activate?'Worker reactivated':'Worker deactivated');
+};
+});
+
+$('entries').querySelectorAll('[data-delete],[data-restore]')
+.forEach(b=>{
+b.onclick=async()=>{
+const id=b.dataset.delete||b.dataset.restore;
+const restoring=!!b.dataset.restore;
+const r=rows.find(x=>x.id===id);
+if(!r)return;
+
+const action=restoring?'Restore':'Remove from list';
+
+if(!confirm(action+' worker '+r.full_name+'?\n\nपुराने Attendance और Salary Records सुरक्षित रहेंगे।')){
+return;
+}
+
+b.disabled=true;
+
+const changes=restoring
+? {is_deleted:false,deleted_at:null}
+: {is_deleted:true,deleted_at:new Date().toISOString()};
+
+const {data:updated,error:err}=await db.from('workers')
+.update(changes)
+.eq('id',id)
+.eq('site_id',site)
+.eq('is_deleted',!restoring)
+.select('id');
+
+if(err){
+b.disabled=false;
+msg('Update failed: '+err.message);
+return;
+}
+
+if(!updated?.length){
+b.disabled=false;
+msg('Worker update नहीं हुआ। Permissions या Status चेक करें।');
+return;
+}
+
+editing=null;
+await render();
+msg(restoring?'Worker restored successfully':'Worker removed from list. History सुरक्षित है।');
 };
 });
 }
