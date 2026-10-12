@@ -561,7 +561,7 @@ const {data:updated,error:err}=await db.from('workers')
 .update(changes)
 .eq('id',id)
 .eq('site_id',site)
-.eq('is_deleted',!restoring)
+.eq('is_deleted',restoring)
 .select('id');
 
 if(err){
