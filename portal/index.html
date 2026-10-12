@@ -1,10 +1,504 @@
-<!doctype html><html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Arif Agro Works | Management</title><style>
-:root{font-family:system-ui,sans-serif;color:#edf5f8;background:#071b28}*{box-sizing:border-box}body{margin:0}header{background:#0c2c3d;border-bottom:3px solid #ff752e;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:10px}h1{font-size:20px;margin:0}b,.accent{color:#ff752e}small,.muted{color:#a8c0ca}main{max-width:900px;margin:18px auto;padding:0 12px}.panel{background:#103044;border:1px solid #325365;border-radius:15px;padding:18px;margin-bottom:15px}h2{margin:0 0 12px;font-size:20px}h3{font-size:16px}label{display:block;font-size:13px;color:#c8dce5;margin:9px 0}input,select,textarea{display:block;width:100%;background:#071e2d;color:#fff;border:1px solid #547083;border-radius:8px;padding:11px;margin-top:5px;font-size:16px}textarea{min-height:60px}button{background:#ff752e;color:#102330;border:0;border-radius:9px;padding:11px 13px;font-weight:700;cursor:pointer}button.secondary{background:#22465a;color:white;border:1px solid #607f91}button:disabled{opacity:.6}.hide{display:none!important}.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}.tabs button{font-size:13px;padding:9px 10px}.tabs .active{background:#ff752e;color:#102330}.tabs button:not(.active){background:#22465a;color:white}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.item{border:1px solid #39586b;border-radius:10px;padding:12px;margin:8px 0;background:#092333;overflow-wrap:anywhere}.item small{display:block;margin-top:5px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}#status{color:#ffbf92;white-space:pre-wrap;min-height:22px}footer{text-align:center;color:#91aeba;padding:20px;font-size:12px}
-</style></head><body><header><div><h1>ARIF <b>AGRO</b> WORKS</h1><small>PRIVATE MANAGEMENT PORTAL · V2</small></div><button class="secondary hide" id="logout">Logout</button></header><main><section class="panel" id="login"><h2>Master / Incharge Login</h2><label>Email<input id="email" type="email" autocomplete="username"></label><label>Password<input id="password" type="password" autocomplete="current-password"></label><button id="signin">Secure Login</button></section><section id="app" class="hide"><section class="panel"><div id="who" class="muted"></div><label>Site चुनें<select id="site"></select></label><div id="tabs" class="tabs"></div></section><section class="panel" id="content"></section></section><p id="status" role="status"></p></main><footer>Authorized access only · Test site permissions before using real financial records</footer><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script><script>
-(()=>{'use strict';const URL='https://qfydekphbdpvvczhimjs.supabase.co',KEY='sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn';const $=x=>document.getElementById(x),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),hide=(id,v)=>$(id).classList.toggle('hide',v),msg=s=>$('status').textContent=s;let db,user,role,sites=[],workers=[],tab='workers';const modules=[['workers','Workers'],['attendance','Attendance'],['advances','Advances'],['expenses','Expenses'],['salary','Salary Payments'],['cash','Cash Ledger']];const spec={workers:{table:'workers',fields:[['full_name','Worker name','text',true],['mobile_number','Mobile','tel'],['joining_date','Joining date','date'],['leaving_date','Leaving date','date'],['daily_wage','Daily wage','number'],['overtime_rate','OT rate','number']]},attendance:{table:'worker_attendance',fields:[['worker_id','Worker','worker',true],['attendance_date','Date','date',true],['status','Status','status',true],['check_in','In time','time'],['check_out','Out time','time'],['overtime_hours','OT hours','number']]},advances:{table:'worker_advances',fields:[['worker_id','Worker','worker',true],['advance_date','Date','date',true],['amount','Amount','number',true],['notes','Notes','text']]},expenses:{table:'site_expenses',fields:[['expense_date','Date','date',true],['category','Category','text',true],['description','Description','text'],['amount','Amount','number',true]]},salary:{table:'worker_salary_payments',fields:[['worker_id','Worker','worker',true],['payment_date','Date','date',true],['period_start','Period from','date'],['period_end','Period to','date'],['amount','Amount','number',true],['notes','Notes','text']]},cash:{table:'site_cash_ledger',fields:[['entry_date','Date','date',true],['entry_type','Type','cash',true],['category','Category','text',true],['description','Description','text'],['amount','Amount','number',true]]}};
-try{db=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true}})}catch(e){msg('Supabase library नहीं खुली');return}
-$('signin').onclick=async()=>{msg('Login हो रहा है...');const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)msg(error.message);else await init()};$('logout').onclick=async()=>{await db.auth.signOut();user=null;role=null;hide('login',false);hide('app',true);hide('logout',true);msg('Logged out')};$('site').onchange=()=>render();
-async function init(){const {data:{user:u}}=await db.auth.getUser();if(!u){hide('login',false);hide('app',true);hide('logout',true);return}user=u;const {data:p,error:pe}=await db.from('staff_profiles').select('role,full_name').eq('user_id',u.id).single();if(pe||!p){msg('Profile access unavailable: '+(pe?.message||''));return}role=p.role;const {data:s,error:se}=await db.from('sites').select('id,site_name').eq('is_active',true).order('site_name');if(se){msg('Sites: '+se.message);return}sites=s||[];hide('login',true);hide('app',false);hide('logout',false);$('who').textContent=(p.full_name||'Staff')+' · '+role;const prev=$('site').value;$('site').innerHTML=sites.map(s=>`<option value="${esc(s.id)}">${esc(s.site_name)}</option>`).join('');if(sites.some(s=>s.id===prev))$('site').value=prev;render()}
-async function render(){const site=$('site').value;if(!site){$('content').textContent='No assigned active sites';return}const tabs=modules.filter(([k])=>role==='master'||!['salary','cash'].includes(k));if(!tabs.some(([k])=>k===tab))tab='workers';$('tabs').innerHTML=tabs.map(([k,n])=>`<button data-tab="${k}" class="${tab===k?'active':''}">${n}</button>`).join('');$('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});msg('');const {data:w,error:we}=await db.from('workers').select('id,full_name').eq('site_id',site).order('full_name');if(we){msg(we.message);return}workers=w||[];const sp=spec[tab];const {data,error}=await db.from(sp.table).select('*').eq('site_id',site).order(tab==='workers'?'created_at':(sp.fields.find(f=>f[2]==='date')||['created_at'])[0],{ascending:false}).limit(100);if(error){msg(error.message);return}const c=$('content');c.innerHTML=`<h2>${esc(tabs.find(x=>x[0]===tab)?.[1])}</h2><p class="muted">${esc(sites.find(s=>s.id===site)?.site_name)} · Latest 100 records</p><div id="entries"></div><h3>नई Entry</h3><form id="entry" class="grid"></form>`;const canWrite=role==='master'||['workers','attendance','advances','expenses'].includes(tab);if(!canWrite){$('entry').innerHTML='<p>Only Master Admin can edit this section.</p>';return}const f=$('entry');f.innerHTML=sp.fields.map(([k,n,t,req])=>`<label>${esc(n)}${req?' *':''}${t==='worker'?`<select name="${k}" ${req?'required':''}><option value="">Choose worker</option>${workers.map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}</option>`).join('')}</select>`:t==='status'?`<select name="${k}"><option value="present">Present</option><option value="absent">Absent</option><option value="half_day">Half day</option><option value="leave">Leave</option></select>`:t==='cash'?`<select name="${k}"><option value="cash_in">Cash in</option><option value="cash_out">Cash out</option></select>`:`<input name="${k}" type="${t}" ${t==='number'?'step="0.01" min="0"':''} ${req?'required':''} ${t==='date'?'value="'+new Date().toLocaleDateString('en-CA')+'"':''}>`}</label>`).join('')+'<div><button type="submit">Save Entry</button></div>';f.onsubmit=async e=>{e.preventDefault();const btn=f.querySelector('button');btn.disabled=true;const values={site_id:site};for(const [k,n,t,req] of sp.fields){const v=f.elements[k].value;if(v!=='')values[k]=t==='number'?Number(v):v}const {error:err}=await db.from(sp.table).insert(values);btn.disabled=false;if(err){msg('Save failed: '+err.message);return}msg('Entry saved');render()};$('entries').innerHTML=(data||[]).length?data.map(r=>`<div class="item"><strong>${esc(r.full_name||workers.find(w=>w.id===r.worker_id)?.full_name||r.category||r.status||r.entry_type||'Entry')}</strong><small>${esc(Object.entries(r).filter(([k,v])=>!['id','site_id','worker_id','created_at'].includes(k)&&v!==null).map(([k,v])=>k+': '+v).join(' · '))}</small></div>`).join(''):'<p class="muted">No entries yet</p>'}
-init();db.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){hide('login',false);hide('app',true);hide('logout',true)}});
-})();</script></body></html>
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arif Agro Works | Portal V3</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#edf5f8;background:#071b28}
+*{box-sizing:border-box}
+body{margin:0}
+header{background:#0c2c3d;border-bottom:3px solid #ff752e;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+h1{font-size:20px;margin:0}
+b{color:#ff752e}
+small,.muted{color:#a8c0ca}
+main{max-width:900px;margin:18px auto;padding:0 12px}
+.panel{background:#103044;border:1px solid #325365;border-radius:15px;padding:18px;margin-bottom:15px}
+h2{margin:0 0 12px;font-size:20px}
+h3{font-size:16px}
+label{display:block;font-size:13px;color:#c8dce5;margin:9px 0}
+input,select,textarea{display:block;width:100%;background:#071e2d;color:#fff;border:1px solid #547083;border-radius:8px;padding:11px;margin-top:5px;font-size:16px}
+button{background:#ff752e;color:#102330;border:0;border-radius:9px;padding:11px 13px;font-weight:700;cursor:pointer}
+button.secondary{background:#22465a;color:white;border:1px solid #607f91}
+button:disabled{opacity:.6}
+.hide{display:none!important}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tabs button{font-size:13px;padding:9px 10px}
+.tabs button:not(.active){background:#22465a;color:white}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.item{border:1px solid #39586b;border-radius:10px;padding:12px;margin:8px 0;background:#092333;overflow-wrap:anywhere}
+.item small{display:block;margin-top:5px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#status{color:#ffbf92;white-space:pre-wrap;min-height:22px}
+footer{text-align:center;color:#91aeba;padding:20px;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+<div>
+<h1>ARIF <b>AGRO</b> WORKS</h1>
+<small>PRIVATE MANAGEMENT PORTAL · V3</small>
+</div>
+<button class="secondary hide" id="logout">Logout</button>
+</header>
+
+<main>
+<section class="panel" id="login">
+<h2>Master / Incharge Login</h2>
+<label>Email<input id="email" type="email"></label>
+<label>Password<input id="password" type="password"></label>
+<button id="signin">Secure Login</button>
+</section>
+
+<section id="app" class="hide">
+<section class="panel">
+<div id="who" class="muted"></div>
+<label>Site चुनें<select id="site"></select></label>
+<div id="tabs" class="tabs"></div>
+</section>
+<section class="panel" id="content"></section>
+</section>
+
+<p id="status" role="status"></p>
+</main>
+
+<footer>Authorized access only · Test permissions before real financial use</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+(()=>{
+'use strict';
+
+const URL='https://qfydekphbdpvvczhimjs.supabase.co';
+const KEY='sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn';
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({
+'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+}[c]));
+const hide=(id,v)=>$(id).classList.toggle('hide',v);
+const msg=s=>$('status').textContent=s;
+
+let db,role,sites=[],workers=[],tab='workers',editing=null;
+
+const modules=[
+['workers','Workers'],
+['attendance','Attendance'],
+['advances','Advances'],
+['expenses','Expenses'],
+['salary','Salary Payments'],
+['cash','Cash Ledger']
+];
+
+const spec={
+workers:{
+table:'workers',
+fields:[
+['full_name','Worker name','text',true],
+['mobile_number','Mobile','tel'],
+['joining_date','Joining date','date'],
+['leaving_date','Leaving date','date'],
+['daily_wage','Daily wage','number'],
+['overtime_rate','OT rate','number']
+]},
+attendance:{
+table:'worker_attendance',
+fields:[
+['worker_id','Worker','worker',true],
+['attendance_date','Date','date',true],
+['status','Status','status',true],
+['check_in','In time','time'],
+['check_out','Out time','time'],
+['overtime_hours','OT hours','number']
+]},
+advances:{
+table:'worker_advances',
+fields:[
+['worker_id','Worker','worker',true],
+['advance_date','Date','date',true],
+['amount','Amount','number',true],
+['notes','Notes','text']
+]},
+expenses:{
+table:'site_expenses',
+fields:[
+['expense_date','Date','date',true],
+['category','Category','text',true],
+['description','Description','text'],
+['amount','Amount','number',true]
+]},
+salary:{
+table:'worker_salary_payments',
+fields:[
+['worker_id','Worker','worker',true],
+['payment_date','Date','date',true],
+['period_start','Period from','date'],
+['period_end','Period to','date'],
+['amount','Amount','number',true],
+['notes','Notes','text']
+]},
+cash:{
+table:'site_cash_ledger',
+fields:[
+['entry_date','Date','date',true],
+['entry_type','Type','cash',true],
+['category','Category','text',true],
+['description','Description','text'],
+['amount','Amount','number',true]
+]}
+};
+
+try{
+db=window.supabase.createClient(URL,KEY);
+}catch(e){
+msg('Supabase library नहीं खुली');
+return;
+}
+
+$('signin').onclick=async()=>{
+msg('Login हो रहा है...');
+const {error}=await db.auth.signInWithPassword({
+email:$('email').value.trim(),
+password:$('password').value
+});
+if(error)msg(error.message);
+else await init();
+};
+
+$('logout').onclick=async()=>{
+await db.auth.signOut();
+role=null;
+hide('login',false);
+hide('app',true);
+hide('logout',true);
+msg('Logged out');
+};
+
+$('site').onchange=()=>{
+editing=null;
+render();
+};
+
+async function init(){
+const {data:{user}}=await db.auth.getUser();
+
+if(!user){
+hide('login',false);
+hide('app',true);
+hide('logout',true);
+return;
+}
+
+const {data:p,error:pe}=await db
+.from('staff_profiles')
+.select('role,full_name')
+.eq('user_id',user.id)
+.single();
+
+if(pe||!p){
+msg('Profile error: '+(pe?.message||'Not found'));
+return;
+}
+
+role=p.role;
+
+const {data:s,error:se}=await db
+.from('sites')
+.select('id,site_name')
+.eq('is_active',true)
+.order('site_name');
+
+if(se){
+msg('Sites error: '+se.message);
+return;
+}
+
+sites=s||[];
+
+hide('login',true);
+hide('app',false);
+hide('logout',false);
+
+$('who').textContent=(p.full_name||'Staff')+' · '+role;
+
+const previous=$('site').value;
+
+$('site').innerHTML=sites.map(s=>
+`<option value="${esc(s.id)}">${esc(s.site_name)}</option>`
+).join('');
+
+if(sites.some(s=>s.id===previous)){
+$('site').value=previous;
+}
+
+await render();
+}
+
+async function render(){
+const site=$('site').value;
+
+if(!site){
+$('content').textContent='No assigned active sites';
+return;
+}
+
+const tabs=modules.filter(([k])=>
+role==='master'||!['salary','cash'].includes(k)
+);
+
+if(!tabs.some(([k])=>k===tab))tab='workers';
+
+$('tabs').innerHTML=tabs.map(([k,n])=>
+`<button data-tab="${k}" class="${tab===k?'active':''}">${n}</button>`
+).join('');
+
+$('tabs').querySelectorAll('[data-tab]').forEach(b=>{
+b.onclick=()=>{
+tab=b.dataset.tab;
+editing=null;
+render();
+};
+});
+
+const {data:w,error:we}=await db
+.from('workers')
+.select('id,full_name,is_active')
+.eq('site_id',site)
+.order('full_name');
+
+if(we){
+msg(we.message);
+return;
+}
+
+workers=w||[];
+
+const sp=spec[tab];
+
+const orderColumn=tab==='workers'
+?'created_at'
+:(sp.fields.find(f=>f[2]==='date')||['created_at'])[0];
+
+const {data,error}=await db
+.from(sp.table)
+.select('*')
+.eq('site_id',site)
+.order(orderColumn,{ascending:false})
+.limit(100);
+
+if(error){
+msg(error.message);
+return;
+}
+
+$('content').innerHTML=`
+<h2>${esc(tabs.find(x=>x[0]===tab)?.[1])}</h2>
+<p class="muted">${esc(sites.find(s=>s.id===site)?.site_name)} · Latest 100 records</p>
+<div id="entries"></div>
+<h3 id="formtitle">नई Entry</h3>
+<form id="entry" class="grid"></form>
+`;
+
+const canWrite=role==='master'
+||['workers','attendance','advances','expenses'].includes(tab);
+
+const f=$('entry');
+
+if(canWrite){
+f.innerHTML=sp.fields.map(([k,n,t,required])=>{
+let field;
+
+if(t==='worker'){
+field=`<select name="${k}" ${required?'required':''}>
+<option value="">Choose worker</option>
+${workers.filter(w=>w.is_active!==false).map(w=>
+`<option value="${esc(w.id)}">${esc(w.full_name)}</option>`
+).join('')}
+</select>`;
+}else if(t==='status'){
+field=`<select name="${k}">
+<option value="present">Present</option>
+<option value="absent">Absent</option>
+<option value="half_day">Half day</option>
+<option value="leave">Leave</option>
+</select>`;
+}else if(t==='cash'){
+field=`<select name="${k}">
+<option value="cash_in">Cash in</option>
+<option value="cash_out">Cash out</option>
+</select>`;
+}else{
+field=`<input name="${k}" type="${t}"
+${required?'required':''}
+${t==='number'?'step="0.01" min="0"':''}
+${t==='date'?'value="'+new Date().toLocaleDateString('en-CA')+'"':''}>`;
+}
+
+return `<label>${esc(n)}${required?' *':''}${field}</label>`;
+}).join('')+`
+<div>
+<button type="submit" id="savebtn">Save Entry</button>
+<button type="button" id="cancelEdit" class="secondary hide">Cancel Edit</button>
+</div>`;
+
+f.onsubmit=async e=>{
+e.preventDefault();
+
+const btn=$('savebtn');
+btn.disabled=true;
+
+const values={site_id:site};
+
+for(const [k,n,t] of sp.fields){
+const value=f.elements[k].value;
+if(value!==''){
+values[k]=t==='number'?Number(value):value;
+}
+}
+
+const isEdit=tab==='workers'&&!!editing;
+
+let result;
+
+if(isEdit){
+result=await db.from('workers')
+.update(values)
+.eq('id',editing)
+.eq('site_id',site)
+.select('id');
+}else{
+result=await db.from(sp.table)
+.insert(values)
+.select('id');
+}
+
+btn.disabled=false;
+
+if(result.error){
+msg('Save failed: '+result.error.message);
+return;
+}
+
+if(!result.data?.length){
+msg('Record save नहीं हुआ। Database permissions चेक करें।');
+return;
+}
+
+editing=null;
+await render();
+msg(isEdit?'Worker updated successfully':'Entry saved');
+};
+
+$('cancelEdit').onclick=()=>{
+editing=null;
+render();
+};
+}else{
+f.innerHTML='<p>Only Master Admin can edit this section.</p>';
+}
+
+$('entries').innerHTML=(data||[]).length
+?data.map(r=>{
+const name=r.full_name
+||workers.find(w=>w.id===r.worker_id)?.full_name
+||r.category||r.status||r.entry_type||'Entry';
+
+const detail=Object.entries(r)
+.filter(([k,v])=>
+!['id','site_id','worker_id','created_at'].includes(k)
+&&v!==null)
+.map(([k,v])=>k+': '+v)
+.join(' · ');
+
+const actions=tab==='workers'&&role==='master'
+?`<div class="actions">
+<button class="secondary" data-edit="${esc(r.id)}">Edit</button>
+<button class="secondary" data-toggle="${esc(r.id)}">
+${r.is_active===false?'Reactivate':'Deactivate'}
+</button>
+</div>`:'';
+
+return `<div class="item">
+<strong>${esc(name)}</strong>
+${tab==='workers'&&r.is_active===false?'<small>Inactive</small>':''}
+<small>${esc(detail)}</small>
+${actions}
+</div>`;
+}).join('')
+:'<p class="muted">No entries yet</p>';
+
+if(tab==='workers'&&role==='master'){
+const rows=data||[];
+
+$('entries').querySelectorAll('[data-edit]').forEach(b=>{
+b.onclick=()=>{
+const r=rows.find(x=>x.id===b.dataset.edit);
+if(!r)return;
+
+editing=r.id;
+
+for(const [k] of sp.fields){
+if(f.elements[k])f.elements[k].value=r[k]??'';
+}
+
+$('formtitle').textContent='Edit Worker: '+r.full_name;
+$('savebtn').textContent='Update Worker';
+$('cancelEdit').classList.remove('hide');
+
+f.scrollIntoView({behavior:'smooth',block:'nearest'});
+msg('Editing '+r.full_name);
+};
+});
+
+$('entries').querySelectorAll('[data-toggle]').forEach(b=>{
+b.onclick=async()=>{
+const r=rows.find(x=>x.id===b.dataset.toggle);
+if(!r)return;
+
+const activate=r.is_active===false;
+const action=activate?'Reactivate':'Deactivate';
+
+if(!confirm(action+' worker '+r.full_name+'?'))return;
+
+b.disabled=true;
+
+const {data:updated,error:err}=await db.from('workers')
+.update({is_active:activate})
+.eq('id',r.id)
+.eq('site_id',site)
+.select('id,is_active');
+
+if(err){
+b.disabled=false;
+msg('Update failed: '+err.message);
+return;
+}
+
+if(!updated?.length){
+b.disabled=false;
+msg('Update नहीं हुआ। Master permissions चेक करें।');
+return;
+}
+
+editing=null;
+await render();
+msg(activate?'Worker reactivated':'Worker deactivated');
+};
+});
+}
+}
+
+init();
+
+db.auth.onAuthStateChange(event=>{
+if(event==='SIGNED_OUT'){
+hide('login',false);
+hide('app',true);
+hide('logout',true);
+}
+});
+
+})();
+</script>
+</body>
+  </html>
