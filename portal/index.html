@@ -6,41 +6,138 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Arif Agro Works | Management</title>
 <style>
-:root{font-family:system-ui,sans-serif;color:#edf5f8;background:#071b28}
+:root{
+font-family:system-ui,sans-serif;
+color:#edf5f8;
+background:#071b28
+}
 *{box-sizing:border-box}
 body{margin:0}
-header{background:#0c2c3d;border-bottom:3px solid #ff752e;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+header{
+background:#0c2c3d;
+border-bottom:3px solid #ff752e;
+padding:16px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+gap:10px
+}
 h1{font-size:20px;margin:0}
 b,.accent{color:#ff752e}
 small,.muted{color:#a8c0ca}
 main{max-width:900px;margin:18px auto;padding:0 12px}
-.panel{background:#103044;border:1px solid #325365;border-radius:15px;padding:18px;margin-bottom:15px}
+.panel{
+background:#103044;
+border:1px solid #325365;
+border-radius:15px;
+padding:18px;
+margin-bottom:15px
+}
 h2{margin:0 0 12px;font-size:20px}
 h3{font-size:16px}
-label{display:block;font-size:13px;color:#c8dce5;margin:9px 0}
-input,select,textarea{display:block;width:100%;background:#071e2d;color:#fff;border:1px solid #547083;border-radius:8px;padding:11px;margin-top:5px;font-size:16px}
+label{
+display:block;
+font-size:13px;
+color:#c8dce5;
+margin:9px 0
+}
+input,select,textarea{
+display:block;
+width:100%;
+background:#071e2d;
+color:#fff;
+border:1px solid #547083;
+border-radius:8px;
+padding:11px;
+margin-top:5px;
+font-size:16px
+}
 textarea{min-height:60px}
-button{background:#ff752e;color:#102330;border:0;border-radius:9px;padding:11px 13px;font-weight:700;cursor:pointer}
-button.secondary{background:#22465a;color:white;border:1px solid #607f91}
+button{
+background:#ff752e;
+color:#102330;
+border:0;
+border-radius:9px;
+padding:11px 13px;
+font-weight:700;
+cursor:pointer
+}
+button.secondary{
+background:#22465a;
+color:white;
+border:1px solid #607f91
+}
 button:disabled{opacity:.6}
 .hide{display:none!important}
-.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tabs{
+display:flex;
+gap:6px;
+flex-wrap:wrap;
+margin-bottom:14px
+}
 .tabs button{font-size:13px;padding:9px 10px}
 .tabs .active{background:#ff752e;color:#102330}
 .tabs button:not(.active){background:#22465a;color:white}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
-.item{border:1px solid #39586b;border-radius:10px;padding:12px;margin:8px 0;background:#092333;overflow-wrap:anywhere}
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+gap:10px
+}
+.item{
+border:1px solid #39586b;
+border-radius:10px;
+padding:12px;
+margin:8px 0;
+background:#092333;
+overflow-wrap:anywhere
+}
 .item small{display:block;margin-top:5px}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-#status{color:#ffbf92;white-space:pre-wrap;min-height:22px}
-footer{text-align:center;color:#91aeba;padding:20px;font-size:12px}
+.actions{
+display:flex;
+gap:8px;
+flex-wrap:wrap;
+margin-top:10px
+}
+#status{
+color:#ffbf92;
+white-space:pre-wrap;
+min-height:22px
+}
+.att-row{
+display:grid;
+grid-template-columns:minmax(100px,1.3fr) minmax(130px,1fr) minmax(90px,.6fr);
+gap:10px;
+align-items:end;
+border-bottom:1px solid #365568;
+padding:12px 0
+}
+.att-name{font-weight:700;padding-bottom:13px}
+.att-row label{margin:0}
+.att-row select,.att-row input{margin-top:4px}
+.att-head{color:#a8c0ca;font-size:12px}
+footer{
+text-align:center;
+color:#91aeba;
+padding:20px;
+font-size:12px
+}
+@media(max-width:540px){
+.att-row{
+grid-template-columns:1fr 1fr
+}
+.att-name{
+grid-column:1/-1;
+padding-bottom:0
+}
+}
 </style>
 </head>
 <body>
+
 <header>
 <div>
 <h1>ARIF <b>AGRO</b> WORKS</h1>
-<small>PRIVATE MANAGEMENT PORTAL · V5.1</small>
+<small>PRIVATE MANAGEMENT PORTAL · V5.2</small>
 </div>
 <button class="secondary hide" id="logout">Logout</button>
 </header>
@@ -48,19 +145,26 @@ footer{text-align:center;color:#91aeba;padding:20px;font-size:12px}
 <main>
 <section class="panel" id="login">
 <h2>Master / Incharge Login</h2>
-<label>Email<input id="email" type="email" autocomplete="username"></label>
-<label>Password<input id="password" type="password" autocomplete="current-password"></label>
+<label>Email
+<input id="email" type="email" autocomplete="username">
+</label>
+<label>Password
+<input id="password" type="password" autocomplete="current-password">
+</label>
 <button id="signin">Secure Login</button>
 </section>
 
 <section id="app" class="hide">
 <section class="panel">
 <div id="who" class="muted"></div>
-<label>Site चुनें<select id="site"></select></label>
+<label>Site चुनें
+<select id="site"></select>
+</label>
 <div id="tabs" class="tabs"></div>
 </section>
 <section class="panel" id="content"></section>
 </section>
+
 <p id="status" role="status"></p>
 </main>
 
@@ -75,11 +179,23 @@ const URL='https://qfydekphbdpvvczhimjs.supabase.co';
 const KEY='sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn';
 
 const $=id=>document.getElementById(id);
+
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({
-'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+'&':'&amp;',
+'<':'&lt;',
+'>':'&gt;',
+'"':'&quot;',
+"'":'&#39;'
 }[c]));
+
 const hide=(id,yes)=>$(id).classList.toggle('hide',yes);
 const msg=v=>$('status').textContent=v;
+
+const today=()=>{
+const d=new Date();
+return new Date(d.getTime()-d.getTimezoneOffset()*60000)
+.toISOString().slice(0,10);
+};
 
 let db,role=null,sites=[],workers=[],tab='workers';
 let editing=null,showDeleted=false,renderVersion=0;
@@ -104,16 +220,6 @@ fields:[
 ['leaving_date','Leaving date','date'],
 ['daily_wage','Daily wage','number'],
 ['overtime_rate','OT rate','number']
-]},
-attendance:{
-table:'worker_attendance',
-fields:[
-['worker_id','Worker','worker',true],
-['attendance_date','Date','date',true],
-['status','Status','status',true],
-['check_in','In time','time'],
-['check_out','Out time','time'],
-['overtime_hours','OT hours','number']
 ]},
 advances:{
 table:'worker_advances',
@@ -251,13 +357,6 @@ ${workers.filter(w=>w.is_deleted!==true&&w.is_active!==false)
 .map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}</option>`)
 .join('')}
 </select>`;
-}else if(type==='status'){
-input=`<select name="${k}">
-<option value="present">Present</option>
-<option value="absent">Absent</option>
-<option value="half_day">Half day</option>
-<option value="leave">Leave</option>
-</select>`;
 }else if(type==='cash'){
 input=`<select name="${k}">
 <option value="cash_in">Cash in</option>
@@ -267,26 +366,28 @@ input=`<select name="${k}">
 input=`<input name="${k}" type="${type}"
 ${required?'required':''}
 ${type==='number'?'step="0.01" min="0"':''}
-${type==='date'?'value="'+new Date().toLocaleDateString('en-CA')+'"':''}>`;
+${type==='date'?'value="'+today()+'"':''}>`;
 }
 
 return `<label>${esc(label)}${required?' *':''}${input}</label>`;
 }
 
+/* SALARY SUMMARY */
+
 async function renderSummary(site){
-const now=new Date();
-const localToday=new Date(now.getTime()-now.getTimezoneOffset()*60000)
-.toISOString().slice(0,10);
+const localToday=today();
 const month=localToday.slice(0,7);
 
 $('content').innerHTML=`
 <h2>Salary Summary</h2>
 <p class="muted">Single Worker या All Workers की Salary Calculate करें</p>
+
 <label>Worker चुनें
 <select id="salaryWorker">
 <option value="all">All Workers — सबकी Salary</option>
 </select>
 </label>
+
 <div class="grid">
 <label>From
 <input type="date" id="fromDate" value="${month}-01">
@@ -295,6 +396,7 @@ $('content').innerHTML=`
 <input type="date" id="toDate" value="${localToday}">
 </label>
 </div>
+
 <button id="calculate">Calculate Salary</button>
 <p class="muted">
 Current worker wage और OT rate पर हिसाब;
@@ -320,6 +422,10 @@ $('salaryWorker').innerHTML=
 workerList.map(w=>
 `<option value="${esc(w.id)}">${esc(w.full_name)}${w.is_deleted?' (Archived)':''}</option>`
 ).join('');
+
+$('salaryWorker').onchange=()=>{
+$('salaryResults').innerHTML='';
+};
 
 $('calculate').onclick=async()=>{
 const start=$('fromDate').value;
@@ -433,6 +539,270 @@ msg('Calculation ready · Selected date range only');
 };
 }
 
+/* BULK ATTENDANCE */
+
+async function renderAttendance(site){
+const activeWorkers=workers.filter(w=>
+w.is_active!==false&&w.is_deleted!==true
+);
+
+$('content').innerHTML=`
+<h2>Bulk Attendance</h2>
+<p class="muted">एक ही बार सभी Workers की Attendance लगाएँ।</p>
+
+<label>Attendance Date
+<input type="date" id="attDate" value="${today()}">
+</label>
+
+<div class="actions">
+<button type="button" class="secondary" id="loadAtt">
+Load Attendance
+</button>
+<button type="button" class="secondary" id="allPresent">
+Mark All Present
+</button>
+</div>
+
+<div id="attList"></div>
+
+<div class="actions">
+<button id="saveAll" type="button">Save All Attendance</button>
+</div>
+
+<p class="muted" id="attInfo"></p>`;
+
+const dateInput=$('attDate');
+const list=$('attList');
+const info=$('attInfo');
+const save=$('saveAll');
+
+let existing=new Map();
+let loadedDate='';
+let loading=false;
+
+function setBusy(v){
+loading=v;
+save.disabled=v;
+$('loadAtt').disabled=v;
+$('allPresent').disabled=v;
+dateInput.disabled=v;
+}
+
+function buildRows(){
+if(!activeWorkers.length){
+list.innerHTML='<p class="muted">No active workers</p>';
+save.disabled=true;
+return;
+}
+
+list.innerHTML=activeWorkers.map(w=>{
+const a=existing.get(String(w.id));
+const status=a?.status||'present';
+const ot=Number(a?.overtime_hours||0);
+
+return `<div class="att-row" data-worker="${esc(w.id)}">
+<div class="att-name">${esc(w.full_name)}
+<small>${a?'Saved attendance':'New attendance'}</small>
+</div>
+
+<label>Status
+<select class="attStatus">
+<option value="present" ${status==='present'?'selected':''}>Present</option>
+<option value="absent" ${status==='absent'?'selected':''}>Absent</option>
+<option value="half_day" ${status==='half_day'?'selected':''}>Half Day</option>
+<option value="leave" ${status==='leave'?'selected':''}>Leave</option>
+</select>
+</label>
+
+<label>OT Hours
+<input class="attOT" type="number" min="0" step="0.5" value="${ot}">
+</label>
+</div>`;
+}).join('');
+
+list.querySelectorAll('.attStatus').forEach(s=>{
+s.onchange=()=>{
+const row=s.closest('.att-row');
+if(s.value==='absent'||s.value==='leave'){
+row.querySelector('.attOT').value=0;
+}
+};
+});
+}
+
+async function loadAttendance(){
+const date=dateInput.value;
+
+if(!date){
+msg('Attendance date चुनें');
+return;
+}
+
+setBusy(true);
+info.textContent='Attendance loading...';
+
+const {data,error}=await db
+.from('worker_attendance')
+.select('id,worker_id,status,overtime_hours')
+.eq('site_id',site)
+.eq('attendance_date',date)
+.range(0,9999);
+
+if(error){
+setBusy(false);
+msg('Attendance load failed: '+error.message);
+info.textContent='Loading failed';
+return;
+}
+
+if(data.length>=10000){
+setBusy(false);
+msg('Too many attendance records');
+return;
+}
+
+existing=new Map();
+let duplicates=0;
+
+for(const r of data){
+const key=String(r.worker_id);
+if(existing.has(key))duplicates++;
+else existing.set(key,r);
+}
+
+loadedDate=date;
+buildRows();
+setBusy(false);
+
+info.textContent=
+`${activeWorkers.length} Active Workers · ${data.length} Saved Entries`;
+
+if(duplicates){
+msg('Warning: इस Date पर Duplicate Attendance records मिले हैं। Save से पहले database साफ करना होगा।');
+}else{
+msg('Attendance loaded: '+date);
+}
+}
+
+$('loadAtt').onclick=loadAttendance;
+
+dateInput.onchange=()=>{
+loadedDate='';
+existing.clear();
+list.innerHTML='<p class="muted">नई Date के लिए Load Attendance दबाएँ।</p>';
+info.textContent='';
+save.disabled=true;
+};
+
+$('allPresent').onclick=()=>{
+list.querySelectorAll('.attStatus').forEach(s=>{
+s.value='present';
+});
+msg('All marked Present. Save All दबाने पर Save होगा।');
+};
+
+save.onclick=async()=>{
+const date=dateInput.value;
+
+if(!date||date!==loadedDate){
+msg('पहले इसी Date की Attendance Load करें');
+return;
+}
+
+const rows=[...list.querySelectorAll('.att-row')];
+
+if(!rows.length){
+msg('No active workers');
+return;
+}
+
+const entries=rows.map(row=>{
+const status=row.querySelector('.attStatus').value;
+const overtime=Number(row.querySelector('.attOT').value);
+
+return {
+worker_id:row.dataset.worker,
+status,
+overtime_hours:status==='absent'||status==='leave'?0:overtime
+};
+});
+
+if(entries.some(r=>!Number.isFinite(r.overtime_hours)||r.overtime_hours<0)){
+msg('OT Hours सही भरें');
+return;
+}
+
+if(!confirm(
+`${date} की ${entries.length} Workers की Attendance Save/Update करें?`
+))return;
+
+setBusy(true);
+msg('Attendance saving...');
+
+let saved=0;
+const failures=[];
+
+/*
+Existing row को UPDATE और नई row को INSERT करते हैं।
+यह तरीका database में unique constraint न होने पर भी
+existing attendance को पहचान सकता है।
+*/
+
+for(const entry of entries){
+const old=existing.get(String(entry.worker_id));
+
+const values={
+site_id:site,
+worker_id:entry.worker_id,
+attendance_date:date,
+status:entry.status,
+overtime_hours:entry.overtime_hours
+};
+
+let result;
+
+if(old){
+result=await db
+.from('worker_attendance')
+.update({
+status:entry.status,
+overtime_hours:entry.overtime_hours
+})
+.eq('id',old.id)
+.eq('site_id',site)
+.select('id');
+}else{
+result=await db
+.from('worker_attendance')
+.insert(values)
+.select('id');
+}
+
+if(result.error||!result.data?.length){
+failures.push(
+entry.worker_id+': '+(result.error?.message||'Permission denied')
+);
+}else{
+saved++;
+}
+}
+
+setBusy(false);
+
+if(failures.length){
+msg(`${saved} Saved · ${failures.length} Failed\n${failures.slice(0,5).join('\n')}`);
+}else{
+msg(`Success! ${saved} Workers की Attendance Save हो गई।`);
+}
+
+await loadAttendance();
+};
+
+await loadAttendance();
+}
+
+/* MAIN RENDER */
+
 async function render(){
 const version=++renderVersion;
 const site=$('site').value;
@@ -481,6 +851,11 @@ await renderSummary(site);
 return;
 }
 
+if(tab==='attendance'){
+await renderAttendance(site);
+return;
+}
+
 const sp=spec[tab];
 
 const order=tab==='workers'
@@ -514,10 +889,12 @@ $('content').innerHTML=`
 <p class="muted">
 ${esc(sites.find(s=>s.id===site)?.site_name)} · Latest 100 records
 </p>
+
 ${tab==='workers'&&role==='master'
 ?`<button type="button" class="secondary" id="deletedToggle">
 ${showDeleted?'Show Workers':'Deleted Workers / Restore'}
 </button>`:''}
+
 <div id="entries"></div>
 <h3 id="formtitle">नई Entry</h3>
 <form id="entry" class="grid"></form>`;
@@ -531,7 +908,7 @@ render();
 }
 
 const canWrite=role==='master'
-||['workers','attendance','advances','expenses'].includes(tab);
+||['workers','advances','expenses'].includes(tab);
 
 const f=$('entry');
 
@@ -579,180 +956,4 @@ const q=wasEditing
 ?db.from('workers')
 .update(values)
 .eq('id',editing)
-.eq('site_id',site)
-.select('id')
-:db.from(sp.table)
-.insert(values)
-.select('id');
-
-const {data:saved,error:err}=await q;
-
-btn.disabled=false;
-
-if(err){
-msg('Save failed: '+err.message);
-return;
-}
-
-if(!saved?.length){
-msg('Save नहीं हुआ। Database permissions चेक करें।');
-return;
-}
-
-editing=null;
-await render();
-
-msg(wasEditing?'Worker updated':'Entry saved');
-};
-}
-
-$('entries').innerHTML=visible.length
-?visible.map(r=>{
-const name=r.full_name
-||workers.find(w=>w.id===r.worker_id)?.full_name
-||r.category||r.status||r.entry_type||'Entry';
-
-const detail=Object.entries(r)
-.filter(([k,v])=>
-!['id','site_id','worker_id','created_at'].includes(k)&&v!==null)
-.map(([k,v])=>k+': '+v)
-.join(' · ');
-
-let buttons='';
-
-if(tab==='workers'&&role==='master'){
-buttons=r.is_deleted===true
-?`<div class="actions">
-<button data-restore="${esc(r.id)}">Restore Worker</button>
-</div>`
-:`<div class="actions">
-<button class="secondary" data-edit="${esc(r.id)}">Edit</button>
-<button class="secondary" data-toggle="${esc(r.id)}">
-${r.is_active===false?'Reactivate':'Deactivate'}
-</button>
-<button data-delete="${esc(r.id)}">Delete from List</button>
-</div>`;
-}
-
-return `<div class="item">
-<strong>${esc(name)}</strong>
-${r.is_deleted===true?'<small>Deleted from list</small>':''}
-<small>${esc(detail)}</small>
-${buttons}
-</div>`;
-}).join('')
-:'<p class="muted">No entries yet</p>';
-
-if(tab!=='workers'||role!=='master')return;
-
-const rows=visible;
-
-$('entries').querySelectorAll('[data-edit]').forEach(b=>{
-b.onclick=()=>{
-const r=rows.find(x=>x.id===b.dataset.edit);
-
-if(!r||!f.elements)return;
-
-editing=r.id;
-
-for(const [k] of sp.fields){
-if(f.elements[k])f.elements[k].value=r[k]??'';
-}
-
-$('formtitle').textContent='Edit Worker: '+r.full_name;
-$('savebtn').textContent='Update Worker';
-$('cancelEdit').classList.remove('hide');
-
-f.scrollIntoView({behavior:'smooth',block:'nearest'});
-msg('Editing '+r.full_name);
-};
-});
-
-$('entries').querySelectorAll('[data-toggle]').forEach(b=>{
-b.onclick=async()=>{
-const r=rows.find(x=>x.id===b.dataset.toggle);
-if(!r)return;
-
-const activate=r.is_active===false;
-
-if(!confirm((activate?'Reactivate ':'Deactivate ')+r.full_name+'?')){
-return;
-}
-
-b.disabled=true;
-
-const {data:changed,error:err}=await db.from('workers')
-.update({is_active:activate})
-.eq('id',r.id)
-.eq('site_id',site)
-.select('id');
-
-if(err||!changed?.length){
-b.disabled=false;
-msg(err?.message||'Update not permitted');
-return;
-}
-
-editing=null;
-await render();
-msg(activate?'Worker reactivated':'Worker deactivated');
-};
-});
-
-$('entries').querySelectorAll('[data-delete],[data-restore]')
-.forEach(b=>{
-b.onclick=async()=>{
-const restoring=!!b.dataset.restore;
-const id=b.dataset.restore||b.dataset.delete;
-const r=rows.find(x=>x.id===id);
-
-if(!r)return;
-
-if(!confirm(
-(restoring?'Restore ':'Remove from list (history will remain): ')+
-r.full_name+'?'
-))return;
-
-b.disabled=true;
-
-const values=restoring
-?{is_deleted:false,deleted_at:null}
-:{is_deleted:true,deleted_at:new Date().toISOString()};
-
-const {data:changed,error:err}=await db.from('workers')
-.update(values)
-.eq('id',id)
-.eq('site_id',site)
-.eq('is_deleted',restoring)
-.select('id');
-
-if(err||!changed?.length){
-b.disabled=false;
-msg(err?.message||'Update not permitted');
-return;
-}
-
-editing=null;
-await render();
-
-msg(restoring
-?'Worker restored'
-:'Worker removed from list; history preserved');
-};
-});
-}
-
-init();
-
-db.auth.onAuthStateChange(event=>{
-if(event==='SIGNED_OUT'){
-hide('login',false);
-hide('app',true);
-hide('logout',true);
-}
-});
-
-})();
-</script>
-</body>
-</html>
+.eq
