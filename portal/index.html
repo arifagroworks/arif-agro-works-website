@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Arif Agro Works V5.6</title>
+<title>Arif Agro Works V5.7</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#071b28;color:#eef6fa;font-family:Arial,sans-serif}
@@ -27,13 +27,18 @@ button:disabled{opacity:.5}
 .card small{display:block;margin:5px 0}
 #notice,#loginMsg{white-space:pre-wrap;overflow-wrap:anywhere;color:#ffccaa;margin:12px 0;font-size:13px}
 .att{border-bottom:1px solid #36596b;padding:10px 0}
+.report-table{width:100%;border-collapse:collapse;font-size:12px}
+.report-table th,.report-table td{border:1px solid #36596b;padding:9px 5px;text-align:center}
+.report-table th{background:#284b60}
+.report-wrap{overflow-x:auto}
+.report-table td:first-child,.report-table th:first-child{text-align:left}
 footer{text-align:center;color:#abc3ce;font-size:12px;padding:20px}
 </style>
 </head>
 <body>
 <header>
 <div><b>ARIF <span style="color:#ff752e">AGRO</span> WORKS</b><br>
-<small>PRIVATE MANAGEMENT PORTAL · V5.6</small></div>
+<small>PRIVATE MANAGEMENT PORTAL · V5.7</small></div>
 <button id="logout" class="alt hide">Logout</button>
 </header>
 <main>
@@ -67,7 +72,16 @@ const date=()=>{let d=new Date();return new Date(d.getTime()-d.getTimezoneOffset
 const cash=x=>'₹'+Number(x||0).toLocaleString('en-IN',{maximumFractionDigits:2});
 const wait=(p,n=15000)=>Promise.race([p,new Promise((_,r)=>setTimeout(()=>r(Error('Request timeout')),n))]);
 let db,role='',sites=[],workers=[],tab='workers',edit=null,deleted=false,seq=0;
-const tabs=[['workers','Workers'],['summary','Salary Summary'],['attendance','Attendance'],['advances','Advances'],['expenses','Expenses'],['salary','Salary Payments'],['ledger','Cash Ledger']];
+const tabs=[
+['workers','Workers'],
+['summary','Salary Summary'],
+['attendance','Attendance'],
+['report','Monthly Report'],
+['advances','Advances'],
+['expenses','Expenses'],
+['salary','Salary Payments'],
+['ledger','Cash Ledger']
+];
 const config={
 workers:['workers',[['full_name','Name','text',1],['mobile_number','Mobile','tel'],['joining_date','Joining','date'],['leaving_date','Leaving','date'],['daily_wage','Daily Wage','number'],['overtime_rate','OT Rate','number']]],
 advances:['worker_advances',[['worker_id','Worker','worker',1],['advance_date','Date','date',1],['amount','Amount','number',1],['notes','Notes','text']]],
@@ -75,8 +89,10 @@ expenses:['site_expenses',[['expense_date','Date','date',1],['category','Categor
 salary:['worker_salary_payments',[['worker_id','Worker','worker',1],['payment_date','Date','date',1],['period_start','Period From','date'],['period_end','Period To','date'],['amount','Amount','number',1],['notes','Notes','text']]],
 ledger:['site_cash_ledger',[['entry_date','Date','date',1],['entry_type','Type','cash',1],['category','Category','text',1],['description','Description','text'],['amount','Amount','number',1]]]
 };
+
 window.onerror=(m,s,l)=>info('JavaScript Error line '+l+': '+m);
 window.onunhandledrejection=e=>notice('Error: '+(e.reason?.message||e.reason));
+
 function loadLibrary(){
 const urls=[
 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
@@ -95,6 +111,7 @@ s.src=urls[i++];document.head.appendChild(s);
 }
 next();
 }
+
 async function start(){
 try{
 db=window.supabase.createClient(
@@ -108,55 +125,89 @@ let r=await wait(db.auth.getSession());
 if(r.data?.session)await init();
 }catch(e){info('Startup Error: '+e.message)}
 }
+
 $('loginForm').onsubmit=async e=>{
-e.preventDefault();let b=$('loginBtn');b.disabled=true;b.textContent='Logging in...';
+e.preventDefault();
+let b=$('loginBtn');
+b.disabled=true;
+b.textContent='Logging in...';
 info('Checking credentials...');
 try{
-let r=await wait(db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value}));
+let r=await wait(db.auth.signInWithPassword({
+email:$('email').value.trim(),
+password:$('password').value
+}));
 if(r.error)throw r.error;
 await init();
 }catch(x){info('Login Error: '+x.message)}
 finally{b.disabled=false;b.textContent='Secure Login'}
 };
+
 $('logout').onclick=async()=>{
-await db.auth.signOut();$('app').classList.add('hide');
-$('login').classList.remove('hide');$('logout').classList.add('hide');info('Logged out');
+await db.auth.signOut();
+$('app').classList.add('hide');
+$('login').classList.remove('hide');
+$('logout').classList.add('hide');
+info('Logged out');
 };
-$('site').onchange=()=>{edit=null;deleted=false;render()};
+
+$('site').onchange=()=>{
+edit=null;deleted=false;render();
+};
+
 async function init(){
-let u=await wait(db.auth.getUser());if(u.error)throw u.error;
+let u=await wait(db.auth.getUser());
+if(u.error)throw u.error;
 if(!u.data.user)return;
 let p=await wait(db.from('staff_profiles').select('role,full_name').eq('user_id',u.data.user.id).single());
-if(p.error)throw p.error;role=p.data.role;
+if(p.error)throw p.error;
+role=p.data.role;
 let s=await wait(db.from('sites').select('id,site_name').eq('is_active',true).order('site_name'));
-if(s.error)throw s.error;sites=s.data||[];
+if(s.error)throw s.error;
+sites=s.data||[];
 $('who').textContent=(p.data.full_name||'Staff')+' · '+role;
 $('site').innerHTML=sites.map(x=>`<option value="${esc(x.id)}">${esc(x.site_name)}</option>`).join('');
-$('login').classList.add('hide');$('app').classList.remove('hide');$('logout').classList.remove('hide');
-await render();notice('Portal ready');
+$('login').classList.add('hide');
+$('app').classList.remove('hide');
+$('logout').classList.remove('hide');
+await render();
+notice('Portal ready');
 }
+
 function field(f){
 let [k,name,type,req]=f,v='';
-if(type==='worker')v='<select name="'+k+'" required><option value="">Select Worker</option>'+workers.filter(w=>!w.is_deleted&&w.is_active!==false).map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}</option>`).join('')+'</select>';
-else if(type==='cash')v='<select name="'+k+'"><option value="cash_in">Cash In</option><option value="cash_out">Cash Out</option></select>';
-else v=`<input name="${k}" type="${type}" ${req?'required':''} ${type==='number'?'min="0" step="0.01"':''} ${type==='date'?'value="'+date()+'"':''}>`;
+if(type==='worker')
+v='<select name="'+k+'" required><option value="">Select Worker</option>'+
+workers.filter(w=>!w.is_deleted&&w.is_active!==false)
+.map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}</option>`).join('')+'</select>';
+else if(type==='cash')
+v='<select name="'+k+'"><option value="cash_in">Cash In</option><option value="cash_out">Cash Out</option></select>';
+else
+v=`<input name="${k}" type="${type}" ${req?'required':''} ${type==='number'?'min="0" step="0.01"':''} ${type==='date'?'value="'+date()+'"':''}>`;
 return `<label>${name}${req?' *':''}${v}</label>`;
 }
+
 async function render(){
 let n=++seq,site=$('site').value;
 if(!site){$('content').textContent='No assigned sites';return}
 let allowed=tabs.filter(x=>role==='master'||!['summary','salary','ledger'].includes(x[0]));
 if(!allowed.some(x=>x[0]===tab))tab='workers';
 $('tabs').innerHTML=allowed.map(x=>`<button data-tab="${x[0]}" class="${tab===x[0]?'active':''}">${x[1]}</button>`).join('');
-$('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;edit=null;deleted=false;render()});
+$('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+tab=b.dataset.tab;edit=null;deleted=false;render();
+});
 let w=await db.from('workers').select('id,full_name,is_active,is_deleted').eq('site_id',site).order('full_name');
-if(n!==seq)return;if(w.error){notice(w.error.message);return}workers=w.data||[];
+if(n!==seq)return;
+if(w.error){notice(w.error.message);return}
+workers=w.data||[];
 if(tab==='summary')return summary(site);
 if(tab==='attendance')return attendance(site);
+if(tab==='report')return monthlyReport(site);
 let [table,fields]=config[tab];
 let order=tab==='workers'?'created_at':(fields.find(f=>f[2]==='date')||['created_at'])[0];
 let r=await db.from(table).select('*').eq('site_id',site).order(order,{ascending:false}).limit(100);
-if(n!==seq)return;if(r.error){notice(r.error.message);return}
+if(n!==seq)return;
+if(r.error){notice(r.error.message);return}
 let rows=(r.data||[]).filter(x=>tab!=='workers'||(deleted?x.is_deleted===true:x.is_deleted!==true));
 let can=role==='master'||['workers','advances','expenses'].includes(tab);
 $('content').innerHTML=`<h2>${allowed.find(x=>x[0]===tab)[1]}</h2>
@@ -167,37 +218,55 @@ $('rows').innerHTML=rows.length?rows.map(x=>{
 let name=x.full_name||workers.find(w=>String(w.id)===String(x.worker_id))?.full_name||x.category||x.entry_type||'Entry';
 let detail=Object.entries(x).filter(([k,v])=>!['id','site_id','worker_id','created_at'].includes(k)&&v!==null).map(([k,v])=>k+': '+v).join(' · ');
 let buttons='';
-if(tab==='workers'&&role==='master')buttons=x.is_deleted?`<button data-restore="${esc(x.id)}">Restore</button>`:`<div class="actions"><button class="alt" data-edit="${esc(x.id)}">Edit</button><button class="alt" data-active="${esc(x.id)}">${x.is_active===false?'Reactivate':'Deactivate'}</button><button data-delete="${esc(x.id)}">Delete from List</button></div>`;
+if(tab==='workers'&&role==='master')
+buttons=x.is_deleted
+?`<button data-restore="${esc(x.id)}">Restore</button>`
+:`<div class="actions"><button class="alt" data-edit="${esc(x.id)}">Edit</button><button class="alt" data-active="${esc(x.id)}">${x.is_active===false?'Reactivate':'Deactivate'}</button><button data-delete="${esc(x.id)}">Delete from List</button></div>`;
 return `<div class="card"><b>${esc(name)}</b><small>${esc(detail)}</small>${buttons}</div>`;
 }).join(''):'<p class="muted">No entries</p>';
 let form=$('form');
-if(!can||(tab==='workers'&&deleted))form.innerHTML='<p class="muted">No entry form available</p>';
+if(!can||(tab==='workers'&&deleted))
+form.innerHTML='<p class="muted">No entry form available</p>';
 else{
 form.innerHTML=fields.map(field).join('')+'<div class="actions"><button id="save">Save Entry</button><button type="button" class="alt" id="cancel">Cancel Edit</button></div>';
 $('cancel').onclick=()=>{edit=null;render()};
 form.onsubmit=async e=>{
-e.preventDefault();$('save').disabled=true;
+e.preventDefault();
+$('save').disabled=true;
 let data={site_id:site};
-fields.forEach(([k,,type])=>{let v=form.elements[k].value;if(v!=='')data[k]=type==='number'?Number(v):v;else if(edit&&tab==='workers')data[k]=null});
+fields.forEach(([k,,type])=>{
+let v=form.elements[k].value;
+if(v!=='')data[k]=type==='number'?Number(v):v;
+else if(edit&&tab==='workers')data[k]=null;
+});
 try{
-let q=edit&&tab==='workers'?db.from(table).update(data).eq('id',edit).eq('site_id',site).select('id'):db.from(table).insert(data).select('id');
-let r=await q;if(r.error)throw r.error;if(!r.data?.length)throw Error('Permission denied');
-edit=null;await render();notice('Saved successfully');
+let q=edit&&tab==='workers'
+?db.from(table).update(data).eq('id',edit).eq('site_id',site).select('id')
+:db.from(table).insert(data).select('id');
+let r=await q;
+if(r.error)throw r.error;
+if(!r.data?.length)throw Error('Permission denied');
+edit=null;
+await render();
+notice('Saved successfully');
 }catch(e){notice('Save Error: '+e.message);$('save').disabled=false}
 };
 }
 if(tab!=='workers'||role!=='master')return;
 $('rows').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{
-let x=rows.find(r=>String(r.id)===b.dataset.edit);edit=x.id;
+let x=rows.find(r=>String(r.id)===b.dataset.edit);
+edit=x.id;
 fields.forEach(([k])=>{if(form.elements[k])form.elements[k].value=x[k]??''});
-$('formTitle').textContent='Edit '+x.full_name;$('save').textContent='Update Worker';
+$('formTitle').textContent='Edit '+x.full_name;
+$('save').textContent='Update Worker';
 form.scrollIntoView({behavior:'smooth'});
 });
 $('rows').querySelectorAll('[data-active]').forEach(b=>b.onclick=async()=>{
 let x=rows.find(r=>String(r.id)===b.dataset.active),active=x.is_active===false;
 if(!confirm((active?'Reactivate ':'Deactivate ')+x.full_name+'?'))return;
 let r=await db.from('workers').update({is_active:active}).eq('id',x.id).eq('site_id',site).select('id');
-if(r.error||!r.data?.length){notice(r.error?.message||'Update denied');return}await render();notice('Worker updated');
+if(r.error||!r.data?.length){notice(r.error?.message||'Update denied');return}
+await render();notice('Worker updated');
 });
 $('rows').querySelectorAll('[data-delete],[data-restore]').forEach(b=>b.onclick=async()=>{
 let restoring=!!b.dataset.restore,id=b.dataset.restore||b.dataset.delete;
@@ -206,16 +275,21 @@ if(!confirm((restoring?'Restore ':'Delete from list: ')+x.full_name+'?'))return;
 let data=restoring?{is_deleted:false,deleted_at:null}:{is_deleted:true,deleted_at:new Date().toISOString()};
 let r=await db.from('workers').update(data).eq('id',id).eq('site_id',site).eq('is_deleted',restoring).select('id');
 if(r.error||!r.data?.length){notice(r.error?.message||'Update denied');return}
-await render();notice(restoring?'Restored':'Deleted from list; history kept');
+await render();
+notice(restoring?'Restored':'Deleted from list; history kept');
 });
 }
+
 async function summary(site){
 let d=date();
 $('content').innerHTML=`<h2>Salary Summary</h2>
 <label>Worker<select id="sw"><option value="all">All Workers</option></select></label>
-<div class="grid"><label>From<input type="date" id="sf" value="${d.slice(0,7)}-01"></label>
-<label>To<input type="date" id="st" value="${d}"></label></div>
-<button id="calc">Calculate Salary</button><p class="muted">Present = 1 day, Half Day = 0.5, Absent/Leave = 0. Current wage rates apply.</p>
+<div class="grid">
+<label>From<input type="date" id="sf" value="${d.slice(0,7)}-01"></label>
+<label>To<input type="date" id="st" value="${d}"></label>
+</div>
+<button id="calc">Calculate Salary</button>
+<p class="muted">Present = 1 day, Half Day = 0.5, Absent/Leave = 0. Current wage rates apply.</p>
 <div id="results"></div>`;
 let r=await db.from('workers').select('id,full_name,daily_wage,overtime_rate,is_deleted').eq('site_id',site).order('full_name');
 if(r.error){notice(r.error.message);return}
@@ -230,16 +304,27 @@ try{
 let q1=db.from('worker_attendance').select('worker_id,status,overtime_hours').eq('site_id',site).gte('attendance_date',from).lte('attendance_date',to);
 let q2=db.from('worker_advances').select('worker_id,amount').eq('site_id',site).gte('advance_date',from).lte('advance_date',to);
 let q3=db.from('worker_salary_payments').select('worker_id,amount').eq('site_id',site).gte('payment_date',from).lte('payment_date',to);
-if(id!=='all'){q1=q1.eq('worker_id',id);q2=q2.eq('worker_id',id);q3=q3.eq('worker_id',id)}
+if(id!=='all'){
+q1=q1.eq('worker_id',id);
+q2=q2.eq('worker_id',id);
+q3=q3.eq('worker_id',id);
+}
 let [a,b,c]=await Promise.all([q1.range(0,9999),q2.range(0,9999),q3.range(0,9999)]);
-for(let r of [a,b,c]){if(r.error)throw r.error;if(r.data.length===10000)throw Error('Use shorter date range')}
+for(let r of [a,b,c]){
+if(r.error)throw r.error;
+if(r.data.length===10000)throw Error('Use shorter date range');
+}
 let sum=(rows,w,k)=>rows.filter(x=>String(x.worker_id)===String(w)).reduce((n,x)=>n+Number(x[k]||0),0);
 let total=0;
 $('results').innerHTML=list.filter(w=>id==='all'||String(w.id)===id).map(w=>{
 let records=a.data.filter(x=>String(x.worker_id)===String(w.id));
 let days=records.reduce((n,x)=>n+(x.status==='present'?1:x.status==='half_day'?.5:0),0);
-let ot=sum(records,w.id,'overtime_hours'),wage=days*Number(w.daily_wage||0),otPay=ot*Number(w.overtime_rate||0);
-let adv=sum(b.data,w.id,'amount'),paid=sum(c.data,w.id,'amount'),due=wage+otPay-adv-paid;
+let ot=sum(records,w.id,'overtime_hours');
+let wage=days*Number(w.daily_wage||0);
+let otPay=ot*Number(w.overtime_rate||0);
+let adv=sum(b.data,w.id,'amount');
+let paid=sum(c.data,w.id,'amount');
+let due=wage+otPay-adv-paid;
 total+=due;
 return `<div class="card"><b>${esc(w.full_name)}</b><small>Paid Days: ${days} · OT: ${ot} hours</small><small>Wage ${cash(wage)} + OT ${cash(otPay)} − Advance ${cash(adv)} − Paid ${cash(paid)}</small><b>Balance: ${cash(due)}</b></div>`;
 }).join('')+`<div class="card"><b>Total Balance: ${cash(total)}</b></div>`;
@@ -248,52 +333,204 @@ notice('Calculation complete');
 finally{$('calc').disabled=false}
 };
 }
+
 async function attendance(site){
 let active=workers.filter(w=>!w.is_deleted&&w.is_active!==false);
 $('content').innerHTML=`<h2>Bulk Attendance</h2>
 <label>Date<input type="date" id="ad" value="${date()}"></label>
-<div class="actions"><button id="load" class="alt">Load Attendance</button><button id="present" class="alt">Mark All Present</button></div>
-<div id="alist"></div><button id="saveAtt" disabled>Save All Attendance</button>`;
+<div class="actions">
+<button id="load" class="alt">Load Attendance</button>
+<button id="present" class="alt">Mark All Present</button>
+</div>
+<div id="alist"></div>
+<button id="saveAtt" disabled>Save All Attendance</button>`;
 let saved=new Map(),loaded='',duplicates=false;
 async function load(){
 loaded='';$('saveAtt').disabled=true;
 try{
-let day=$('ad').value,r=await db.from('worker_attendance').select('id,worker_id,status,overtime_hours').eq('site_id',site).eq('attendance_date',day).range(0,9999);
-if(r.error)throw r.error;if(r.data.length===10000)throw Error('Too many records');
+let day=$('ad').value;
+let r=await db.from('worker_attendance').select('id,worker_id,status,overtime_hours').eq('site_id',site).eq('attendance_date',day).range(0,9999);
+if(r.error)throw r.error;
+if(r.data.length===10000)throw Error('Too many records');
 saved=new Map();duplicates=false;
-r.data.forEach(x=>{let k=String(x.worker_id);if(saved.has(k))duplicates=true;else saved.set(k,x)});
+r.data.forEach(x=>{
+let k=String(x.worker_id);
+if(saved.has(k))duplicates=true;
+else saved.set(k,x);
+});
 $('alist').innerHTML=active.map(w=>{
 let x=saved.get(String(w.id)),s=x?.status||'present';
 return `<div class="att" data-id="${esc(w.id)}"><b>${esc(w.full_name)}</b><div class="grid">
 <label>Status<select class="as">${[['present','Present'],['absent','Absent'],['half_day','Half Day'],['leave','Leave']].map(([v,n])=>`<option value="${v}" ${s===v?'selected':''}>${n}</option>`).join('')}</select></label>
-<label>OT Hours<input class="ao" type="number" min="0" step="0.5" value="${Number(x?.overtime_hours||0)}"></label></div></div>`;
+<label>OT Hours<input class="ao" type="number" min="0" step="0.5" value="${Number(x?.overtime_hours||0)}"></label>
+</div></div>`;
 }).join('');
-$('alist').querySelectorAll('.as').forEach(s=>s.onchange=()=>{if(['absent','leave'].includes(s.value))s.closest('.att').querySelector('.ao').value=0});
-loaded=day;$('saveAtt').disabled=duplicates||!active.length;
+$('alist').querySelectorAll('.as').forEach(s=>s.onchange=()=>{
+if(['absent','leave'].includes(s.value))s.closest('.att').querySelector('.ao').value=0;
+});
+loaded=day;
+$('saveAtt').disabled=duplicates||!active.length;
 notice(duplicates?'Duplicate attendance found; saving disabled':'Attendance loaded: '+day);
 }catch(e){notice('Load Error: '+e.message)}
 }
 $('load').onclick=load;
-$('ad').onchange=()=>{loaded='';$('saveAtt').disabled=true;$('alist').innerHTML='Press Load Attendance'};
-$('present').onclick=()=>{$('alist').querySelectorAll('.as').forEach(s=>s.value='present');notice('Marked Present; press Save All')};
+$('ad').onchange=()=>{
+loaded='';$('saveAtt').disabled=true;
+$('alist').innerHTML='Press Load Attendance';
+};
+$('present').onclick=()=>{
+$('alist').querySelectorAll('.as').forEach(s=>s.value='present');
+notice('Marked Present; press Save All');
+};
 $('saveAtt').onclick=async()=>{
 if(loaded!==$('ad').value||duplicates)return;
 let rows=[...$('alist').querySelectorAll('.att')];
-let entries=rows.map(x=>{let s=x.querySelector('.as').value,ot=Number(x.querySelector('.ao').value);return {id:x.dataset.id,status:s,ot:['absent','leave'].includes(s)?0:ot}});
+let entries=rows.map(x=>{
+let s=x.querySelector('.as').value,ot=Number(x.querySelector('.ao').value);
+return {id:x.dataset.id,status:s,ot:['absent','leave'].includes(s)?0:ot};
+});
 if(entries.some(x=>!Number.isFinite(x.ot)||x.ot<0)){notice('Invalid OT');return}
 if(!confirm('Save '+entries.length+' workers attendance for '+loaded+'?'))return;
-$('saveAtt').disabled=true;let ok=0,errors=[];
+$('saveAtt').disabled=true;
+let ok=0,errors=[];
 for(let x of entries){
 let old=saved.get(String(x.id));
-let r=old?await db.from('worker_attendance').update({status:x.status,overtime_hours:x.ot}).eq('id',old.id).eq('site_id',site).select('id')
+let r=old
+?await db.from('worker_attendance').update({status:x.status,overtime_hours:x.ot}).eq('id',old.id).eq('site_id',site).select('id')
 :await db.from('worker_attendance').insert({site_id:site,worker_id:x.id,attendance_date:loaded,status:x.status,overtime_hours:x.ot}).select('id');
-if(r.error||!r.data?.length)errors.push(r.error?.message||'Permission denied');else ok++;
+if(r.error||!r.data?.length)errors.push(r.error?.message||'Permission denied');
+else ok++;
 }
 notice(ok+' Saved; '+errors.length+' Failed'+(errors.length?'\n'+errors.slice(0,3).join('\n'):''));
 if(!errors.length)await load();
 };
 await load();
 }
+
+/* V5.7 NEW FEATURE: MONTHLY ATTENDANCE REPORT */
+async function monthlyReport(site){
+let month=date().slice(0,7);
+$('content').innerHTML=`
+<h2>Monthly Attendance Report</h2>
+<p class="muted">Worker-wise monthly attendance and overtime report.</p>
+<div class="grid">
+<label>Month<input id="rm" type="month" value="${month}"></label>
+<label>Worker<select id="rw"><option value="all">All Workers</option></select></label>
+</div>
+<div class="actions">
+<button id="runReport">Generate Report</button>
+<button id="printReport" class="alt" style="display:none">Print / Save PDF</button>
+</div>
+<div id="reportResult"></div>`;
+let w=await db.from('workers')
+.select('id,full_name,is_deleted')
+.eq('site_id',site)
+.order('full_name');
+if(w.error){notice('Report Error: '+w.error.message);return}
+let list=w.data||[];
+$('rw').innerHTML='<option value="all">All Workers</option>'+
+list.map(x=>`<option value="${esc(x.id)}">${esc(x.full_name)}${x.is_deleted?' (Archived)':''}</option>`).join('');
+$('runReport').onclick=async()=>{
+let m=$('rm').value,id=$('rw').value;
+if(!/^\d{4}-\d{2}$/.test(m)){notice('Select valid month');return}
+let from=m+'-01';
+let [year,mo]=m.split('-').map(Number);
+let to=new Date(Date.UTC(year,mo,0)).toISOString().slice(0,10);
+let chosen=list.filter(x=>id==='all'||String(x.id)===id);
+$('runReport').disabled=true;
+$('printReport').style.display='none';
+$('reportResult').innerHTML='<p>Loading report...</p>';
+notice('Generating monthly report...');
+try{
+let records=[],offset=0;
+while(true){
+let q=db.from('worker_attendance')
+.select('worker_id,attendance_date,status,overtime_hours')
+.eq('site_id',site)
+.gte('attendance_date',from)
+.lte('attendance_date',to)
+.order('attendance_date')
+.range(offset,offset+999);
+if(id!=='all')q=q.eq('worker_id',id);
+let r=await q;
+if(r.error)throw r.error;
+records.push(...(r.data||[]));
+if(r.data.length<1000)break;
+offset+=1000;
+if(offset>=20000)throw Error('Too many records; contact administrator');
+}
+let totals={present:0,absent:0,half_day:0,leave:0,paid:0,ot:0,recorded:0};
+let reportRows=chosen.map(worker=>{
+let a=records.filter(x=>String(x.worker_id)===String(worker.id));
+let s={present:0,absent:0,half_day:0,leave:0,ot:0};
+a.forEach(x=>{
+if(Object.prototype.hasOwnProperty.call(s,x.status)&&x.status!=='ot')s[x.status]++;
+s.ot+=Number(x.overtime_hours||0);
+});
+let paid=s.present+s.half_day*0.5;
+totals.present+=s.present;
+totals.absent+=s.absent;
+totals.half_day+=s.half_day;
+totals.leave+=s.leave;
+totals.paid+=paid;
+totals.ot+=s.ot;
+totals.recorded+=a.length;
+return `<tr>
+<td>${esc(worker.full_name)}</td>
+<td>${s.present}</td>
+<td>${s.absent}</td>
+<td>${s.half_day}</td>
+<td>${s.leave}</td>
+<td><b>${paid}</b></td>
+<td>${Number(s.ot.toFixed(2))}</td>
+</tr>`;
+}).join('');
+let siteName=sites.find(x=>String(x.id)===String(site))?.site_name||'Site';
+let html=`
+<div class="card">
+<b>${esc(siteName)} · ${esc(m)}</b>
+<small>Workers: ${chosen.length} · Saved Attendance Records: ${totals.recorded}</small>
+<small>Paid Days: ${totals.paid} · Total OT: ${Number(totals.ot.toFixed(2))} hours</small>
+</div>
+<div class="report-wrap">
+<table class="report-table">
+<thead><tr>
+<th>Worker</th><th>P</th><th>A</th><th>H</th><th>L</th><th>Paid Days</th><th>OT Hours</th>
+</tr></thead>
+<tbody>
+${reportRows||'<tr><td colspan="7">No workers found</td></tr>'}
+<tr>
+<th>Total</th>
+<th>${totals.present}</th>
+<th>${totals.absent}</th>
+<th>${totals.half_day}</th>
+<th>${totals.leave}</th>
+<th>${totals.paid}</th>
+<th>${Number(totals.ot.toFixed(2))}</th>
+</tr>
+</tbody></table></div>
+<p class="muted">P = Present, A = Absent, H = Half Day, L = Leave. Paid Days = Present + Half Day × 0.5.</p>
+<p class="muted">Only saved attendance is counted. Missing dates are not automatically marked Absent. OT is counted from saved records.</p>`;
+$('reportResult').innerHTML=html;
+$('printReport').style.display='inline-block';
+$('printReport').onclick=()=>{
+let win=window.open('','_blank');
+if(!win){notice('Allow pop-ups to print the report');return}
+win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Monthly Attendance ${esc(m)}</title>
+<style>body{font-family:Arial;padding:20px;color:#111}.card{margin:12px 0;padding:10px;border:1px solid #aaa}.card small{display:block;margin:5px 0}table{border-collapse:collapse;width:100%}th,td{border:1px solid #777;padding:7px;text-align:center;font-size:12px}th:first-child,td:first-child{text-align:left}.muted{font-size:12px;color:#555}</style>
+</head><body><h2>ARIF AGRO WORKS</h2><h3>Monthly Attendance Report</h3>${html}</body></html>`);
+win.document.close();
+win.focus();
+setTimeout(()=>win.print(),500);
+};
+notice('Monthly report ready');
+}catch(e){
+$('reportResult').innerHTML='';
+notice('Report Error: '+e.message);
+}finally{$('runReport').disabled=false}
+};
+}
+
 loadLibrary();
 </script>
 </body>
