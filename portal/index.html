@@ -40,7 +40,7 @@ footer{text-align:center;color:#91aeba;padding:20px;font-size:12px}
 <header>
 <div>
 <h1>ARIF <b>AGRO</b> WORKS</h1>
-<small>PRIVATE MANAGEMENT PORTAL · V5</small>
+<small>PRIVATE MANAGEMENT PORTAL · V5.1</small>
 </div>
 <button class="secondary hide" id="logout">Logout</button>
 </header>
@@ -82,7 +82,7 @@ const hide=(id,yes)=>$(id).classList.toggle('hide',yes);
 const msg=v=>$('status').textContent=v;
 
 let db,role=null,sites=[],workers=[],tab='workers';
-let editing=null,showDeleted=false;
+let editing=null,showDeleted=false,renderVersion=0;
 
 const modules=[
 ['workers','Workers'],
@@ -275,18 +275,24 @@ return `<label>${esc(label)}${required?' *':''}${input}</label>`;
 
 async function renderSummary(site){
 const now=new Date();
-const month=now.toISOString().slice(0,7);
+const localToday=new Date(now.getTime()-now.getTimezoneOffset()*60000)
+.toISOString().slice(0,10);
+const month=localToday.slice(0,7);
 
 $('content').innerHTML=`
 <h2>Salary Summary</h2>
-<p class="muted">Site-wise calculation · Present, Half Day, OT, Advances, Payments</p>
+<p class="muted">Single Worker या All Workers की Salary Calculate करें</p>
+<label>Worker चुनें
+<select id="salaryWorker">
+<option value="all">All Workers — सबकी Salary</option>
+</select>
+</label>
 <div class="grid">
 <label>From
 <input type="date" id="fromDate" value="${month}-01">
 </label>
 <label>To
-<input type="date" id="toDate"
-value="${new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,10)}">
+<input type="date" id="toDate" value="${localToday}">
 </label>
 </div>
 <button id="calculate">Calculate Salary</button>
@@ -296,12 +302,41 @@ Current worker wage और OT rate पर हिसाब;
 </p>
 <div id="salaryResults"></div>`;
 
+const {data:allWorkers,error:workerError}=await db
+.from('workers')
+.select('id,full_name,daily_wage,overtime_rate,is_deleted')
+.eq('site_id',site)
+.order('full_name');
+
+if(workerError){
+msg('Workers loading failed: '+workerError.message);
+return;
+}
+
+const workerList=allWorkers||[];
+
+$('salaryWorker').innerHTML=
+'<option value="all">All Workers — सबकी Salary</option>'+
+workerList.map(w=>
+`<option value="${esc(w.id)}">${esc(w.full_name)}${w.is_deleted?' (Archived)':''}</option>`
+).join('');
+
 $('calculate').onclick=async()=>{
 const start=$('fromDate').value;
 const end=$('toDate').value;
+const selectedWorker=$('salaryWorker').value;
 
 if(!start||!end||start>end){
 msg('Valid dates चुनें');
+return;
+}
+
+const selectedWorkers=selectedWorker==='all'
+?workerList
+:workerList.filter(w=>w.id===selectedWorker);
+
+if(!selectedWorkers.length){
+msg('Worker नहीं मिला');
 return;
 }
 
@@ -309,36 +344,39 @@ const btn=$('calculate');
 btn.disabled=true;
 msg('Salary calculate हो रही है...');
 
-const [wr,at,ad,pa]=await Promise.all([
-db.from('workers')
-.select('id,full_name,daily_wage,overtime_rate,is_deleted')
-.eq('site_id',site),
-
-db.from('worker_attendance')
+let attendanceQuery=db.from('worker_attendance')
 .select('worker_id,status,overtime_hours')
 .eq('site_id',site)
 .gte('attendance_date',start)
-.lte('attendance_date',end)
-.range(0,9999),
+.lte('attendance_date',end);
 
-db.from('worker_advances')
+let advancesQuery=db.from('worker_advances')
 .select('worker_id,amount')
 .eq('site_id',site)
 .gte('advance_date',start)
-.lte('advance_date',end)
-.range(0,9999),
+.lte('advance_date',end);
 
-db.from('worker_salary_payments')
+let paymentsQuery=db.from('worker_salary_payments')
 .select('worker_id,amount')
 .eq('site_id',site)
 .gte('payment_date',start)
-.lte('payment_date',end)
-.range(0,9999)
+.lte('payment_date',end);
+
+if(selectedWorker!=='all'){
+attendanceQuery=attendanceQuery.eq('worker_id',selectedWorker);
+advancesQuery=advancesQuery.eq('worker_id',selectedWorker);
+paymentsQuery=paymentsQuery.eq('worker_id',selectedWorker);
+}
+
+const [at,ad,pa]=await Promise.all([
+attendanceQuery.range(0,9999),
+advancesQuery.range(0,9999),
+paymentsQuery.range(0,9999)
 ]);
 
 btn.disabled=false;
 
-const failure=[wr,at,ad,pa].find(x=>x.error);
+const failure=[at,ad,pa].find(x=>x.error);
 
 if(failure){
 msg('Calculation failed: '+failure.error.message);
@@ -361,7 +399,7 @@ const total=(rows,id,key)=>rows
 
 let overall=0;
 
-$('salaryResults').innerHTML=(wr.data||[]).map(w=>{
+$('salaryResults').innerHTML=selectedWorkers.map(w=>{
 const attendance=at.data.filter(r=>r.worker_id===w.id);
 
 const days=attendance.reduce((n,r)=>
@@ -388,7 +426,7 @@ Wages ${money(wage)} + OT ${money(overtime)}
 </div>`;
 }).join('')+
 `<div class="item">
-<strong>Total balance: ${money(overall)}</strong>
+<strong>${selectedWorker==='all'?'Total balance':'Selected worker balance'}: ${money(overall)}</strong>
 </div>`;
 
 msg('Calculation ready · Selected date range only');
@@ -396,6 +434,7 @@ msg('Calculation ready · Selected date range only');
 }
 
 async function render(){
+const version=++renderVersion;
 const site=$('site').value;
 
 if(!site){
@@ -428,6 +467,8 @@ const {data:w,error:we}=await db
 .eq('site_id',site)
 .order('full_name');
 
+if(version!==renderVersion)return;
+
 if(we){
 msg('Workers: '+we.message);
 return;
@@ -452,6 +493,8 @@ const {data,error}=await db
 .eq('site_id',site)
 .order(order,{ascending:false})
 .limit(100);
+
+if(version!==renderVersion)return;
 
 if(error){
 msg('Entries: '+error.message);
