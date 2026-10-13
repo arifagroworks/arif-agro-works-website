@@ -1,0 +1,314 @@
+
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arif Agro Works V5.9 Food Test</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#071b28;color:#edf6fb;font:15px Arial,sans-serif}
+header{background:#12364a;border-bottom:3px solid #ff782f;padding:17px}
+h2{margin:0 0 6px}
+main{max-width:950px;margin:auto;padding:14px}
+.box{background:#102d3f;border:1px solid #315064;border-radius:13px;padding:15px;margin:12px 0}
+label{display:block;margin:9px 0 4px;color:#c6dce6}
+input,select,button{width:100%;padding:12px;border-radius:8px;border:1px solid #587183;font:inherit}
+input,select{background:#071b28;color:#fff}
+button{background:#ff782f;color:#101b23;font-weight:bold;border:0;margin-top:10px;cursor:pointer}
+button.secondary{background:#294e65;color:#fff}
+button.danger{background:#713b40;color:#fff}
+button:disabled{opacity:.55}
+small,.muted{color:#b2cad5}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px}
+.item{padding:11px 0;border-bottom:1px solid #355163}
+.item:last-child{border:0}
+.actions{display:flex;gap:8px}
+.actions button{width:auto;padding:7px 11px;font-size:13px}
+#msg{white-space:pre-wrap;padding:8px;color:#ffd3a6}
+.num{font-weight:bold;color:#a7e9b5}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:9px 5px;border-bottom:1px solid #315064;text-align:left}
+.scroll{overflow:auto}
+.warning{color:#ffd1a3}
+</style>
+</head>
+<body>
+<header>
+<h2>Arif Agro Works · V5.9</h2>
+<small>Food Management — Test Only · No salary deductions are posted</small>
+</header>
+<main>
+<div id="msg">Loading...</div>
+
+<section id="login" class="box" hidden>
+<h3>Staff Login</h3>
+<label>Email</label>
+<input id="email" type="email" autocomplete="username">
+<label>Password</label>
+<input id="password" type="password" autocomplete="current-password">
+<button id="signIn">Login</button>
+</section>
+
+<div id="app" hidden>
+<section class="box">
+<div class="grid">
+<div>
+<label>Site</label>
+<select id="site"></select>
+</div>
+<div>
+<label>Report Start</label>
+<input id="from" type="date">
+</div>
+<div>
+<label>Report End</label>
+<input id="to" type="date">
+</div>
+</div>
+<button id="refresh" class="secondary">Refresh / Calculate Food Share</button>
+<button id="signOut" class="secondary">Logout</button>
+</section>
+
+<section class="box">
+<h3>1. Grocery Purchase</h3>
+<div class="grid">
+<div>
+<label>Purchase Date</label>
+<input id="gdate" type="date">
+</div>
+<div>
+<label>Amount ₹</label>
+<input id="gamount" type="number" min="0.01" step="0.01">
+</div>
+<div>
+<label>Details</label>
+<input id="gdesc" placeholder="Rice, flour, vegetables...">
+</div>
+</div>
+<button id="addG">Save Grocery</button>
+<div id="groceries"></div>
+</section>
+
+<section class="box">
+<h3>2. Worker Food Period</h3>
+<div class="grid">
+<div>
+<label>Worker</label>
+<select id="worker"></select>
+</div>
+<div>
+<label>Eating From</label>
+<input id="pfrom" type="date">
+</div>
+<div>
+<label>Eating Through</label>
+<input id="pto" type="date">
+</div>
+<div>
+<label>Payment Type</label>
+<select id="ptype">
+<option value="salary_deduction">Salary Deduction</option>
+<option value="company_paid">Company Paid</option>
+</select>
+</div>
+</div>
+<button id="addP">Save Food Period</button>
+<small>एक Worker के Food Period आपस में Overlap नहीं होने चाहिए। Work Attendance से अलग रिकॉर्ड है।</small>
+<div id="periods"></div>
+</section>
+
+<section class="box">
+<h3>3. Food Cost Sharing</h3>
+<p class="muted">Selected dates में खरीदी गई Grocery का खर्च, उसी अवधि के कुल Food-Days पर बँटेगा।</p>
+<div id="result"></div>
+<p class="warning">Preview only: Final Settlement / Salary Posting अभी बंद है। पुराने FOOD Advances और Grocery Expenses यहाँ अपने-आप नहीं जोड़े जाते।</p>
+</section>
+</div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const URL='https://qfydekphbdpvvczhimjs.supabase.co';
+const KEY='sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn';
+
+const $=id=>document.getElementById(id);
+const msg=t=>$('msg').textContent=t;
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rupee=n=>'₹'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const iso=d=>{
+let y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
+return `${y}-${m}-${day}`;
+};
+const daynum=s=>Math.round(Date.parse(s+'T00:00:00Z')/86400000);
+const days=(a,b)=>daynum(b)-daynum(a)+1;
+
+let db,siteRows=[],workerRows=[],groceryRows=[],periodRows=[],busy=false;
+
+function err(e){
+msg('Error: '+(e?.message||e));
+console.error(e);
+}
+async function request(q){
+const r=await q;
+if(r.error)throw r.error;
+return r.data||[];
+}
+function currentSite(){return $('site').value}
+function fillWorker(){
+const sid=currentSite();
+$('worker').innerHTML=workerRows.filter(w=>String(w.site_id)===sid).map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}${w.is_deleted?' (deleted)':''}</option>`).join('');
+}
+function setDefaults(){
+const d=new Date(),today=iso(d);
+$('gdate').value=today;
+$('pfrom').value=today;
+$('pto').value=today;
+$('from').value=iso(new Date(d.getFullYear(),d.getMonth(),1));
+$('to').value=iso(new Date(d.getFullYear(),d.getMonth()+1,0));
+}
+async function init(){
+if(!window.supabase?.createClient)throw Error('Supabase library failed to load');
+db=supabase.createClient(URL,KEY);
+const {data:{session}}=await db.auth.getSession();
+if(!session){
+$('login').hidden=false;
+msg('Please log in');
+return;
+}
+await enter();
+}
+async function enter(){
+const {data:{user}}=await db.auth.getUser();
+if(!user){
+$('login').hidden=false;
+return;
+}
+siteRows=await request(db.from('sites').select('id,site_name,is_active').order('site_name'));
+if(!siteRows.length)throw Error('No accessible sites. Check site permissions.');
+$('site').innerHTML=siteRows.map(s=>`<option value="${esc(s.id)}">${esc(s.site_name)}</option>`).join('');
+$('login').hidden=true;
+$('app').hidden=false;
+setDefaults();
+await load();
+}
+async function load(){
+const sid=currentSite();
+if(!sid)return;
+msg('Loading food data...');
+try{
+const [w,g,p]=await Promise.all([
+request(db.from('workers').select('id,site_id,full_name,is_deleted').eq('site_id',sid).order('full_name').limit(1000)),
+request(db.from('food_grocery').select('*').eq('site_id',sid).order('purchase_date',{ascending:false}).limit(1000)),
+request(db.from('worker_food_periods').select('*').eq('site_id',sid).order('start_date',{ascending:false}).limit(1000))
+]);
+workerRows=w;
+groceryRows=g;
+periodRows=p;
+fillWorker();
+render();
+msg('Loaded successfully · Site: '+siteRows.find(x=>String(x.id)===sid)?.site_name);
+}catch(e){err(e)}
+}
+function workerName(id){
+return workerRows.find(w=>String(w.id)===String(id))?.full_name||'Unknown worker';
+}
+function render(){
+$('groceries').innerHTML='<h4>Saved Purchases</h4>'+(groceryRows.length?groceryRows.map(g=>`<div class="item"><b>${esc(g.purchase_date)} · ${rupee(g.amount)}</b><div>${esc(g.description)}</div><div class="actions"><button class="danger" data-g="${esc(g.id)}">Delete</button></div></div>`).join(''):'<small>No purchases yet</small>');
+$('periods').innerHTML='<h4>Saved Food Periods</h4>'+(periodRows.length?periodRows.map(p=>`<div class="item"><b>${esc(workerName(p.worker_id))}</b><div>${esc(p.start_date)} → ${esc(p.end_date)} · ${esc(p.payment_type==='company_paid'?'Company Paid':'Salary Deduction')}</div><div class="actions"><button class="danger" data-p="${esc(p.id)}">Delete</button></div></div>`).join(''):'<small>No periods yet</small>');
+calculate();
+}
+function calculate(){
+let a=$('from').value,b=$('to').value;
+if(!a||!b||b<a){
+$('result').textContent='Choose valid report dates';
+return;
+}
+const groceries=groceryRows.filter(g=>g.purchase_date>=a&&g.purchase_date<=b);
+const total=groceries.reduce((n,g)=>n+Number(g.amount||0),0);
+const map=new Map();
+for(const p of periodRows){
+const lo=p.start_date>a?p.start_date:a;
+const hi=p.end_date<b?p.end_date:b;
+if(lo>hi)continue;
+const n=days(lo,hi);
+const k=String(p.worker_id)+'|'+p.payment_type;
+const old=map.get(k)||{worker_id:p.worker_id,type:p.payment_type,days:0};
+old.days+=n;
+map.set(k,old);
+}
+const entries=[...map.values()];
+const totalDays=entries.reduce((n,x)=>n+x.days,0);
+const overlaps=periodRows.some((p,i)=>periodRows.some((q,j)=>j>i&&String(p.worker_id)===String(q.worker_id)&&p.start_date<=q.end_date&&q.start_date<=p.end_date));
+let html=`<p><b>Grocery Total:</b> <span class="num">${rupee(total)}</span> (${groceries.length} purchases)</p><p><b>Total Food-Days:</b> ${totalDays} · <b>Rate/Day:</b> ${totalDays?rupee(total/totalDays):'—'}</p>`;
+if(overlaps)html+='<p class="warning">⚠️ Overlapping food periods found. Correct them before using these figures.</p>';
+if(total&&!totalDays)html+='<p class="warning">⚠️ Grocery expense exists but no worker food-days in this period.</p>';
+html+='<div class="scroll"><table><tr><th>Worker</th><th>Days</th><th>Share</th><th>Paid By</th></tr>';
+let salary=0,company=0;
+for(const x of entries.sort((u,v)=>workerName(u.worker_id).localeCompare(workerName(v.worker_id)))){
+const share=totalDays?total*x.days/totalDays:0;
+if(x.type==='company_paid')company+=share;
+else salary+=share;
+html+=`<tr><td>${esc(workerName(x.worker_id))}</td><td>${x.days}</td><td>${rupee(share)}</td><td>${x.type==='company_paid'?'Company':'Salary'}</td></tr>`;
+}
+html+=`</table></div><p><b>Salary Share (Preview):</b> ${rupee(salary)}<br><b>Company Share:</b> ${rupee(company)}</p>`;
+if(groceryRows.length===1000||periodRows.length===1000)html+='<p class="warning">Record limit reached; report may be incomplete.</p>';
+$('result').innerHTML=html;
+}
+async function act(fn){
+if(busy)return;
+busy=true;
+try{await fn()}catch(e){err(e)}finally{busy=false}
+}
+$('signIn').onclick=()=>act(async()=>{
+const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+if(error)throw error;
+await enter();
+});
+$('signOut').onclick=()=>act(async()=>{
+await db.auth.signOut();
+location.reload();
+});
+$('site').onchange=load;
+$('refresh').onclick=load;
+$('from').onchange=calculate;
+$('to').onchange=calculate;
+$('addG').onclick=()=>act(async()=>{
+const sid=currentSite(),purchase_date=$('gdate').value,amount=Number($('gamount').value),description=$('gdesc').value.trim();
+if(!purchase_date||!Number.isFinite(amount)||amount<=0)throw Error('Valid date and amount required');
+if(!confirm(`Save grocery ${rupee(amount)} on ${purchase_date}?`))return;
+await request(db.from('food_grocery').insert({site_id:sid,purchase_date,amount,description}).select('id'));
+$('gamount').value='';
+$('gdesc').value='';
+await load();
+});
+$('addP').onclick=()=>act(async()=>{
+const site_id=currentSite(),worker_id=$('worker').value,start_date=$('pfrom').value,end_date=$('pto').value,payment_type=$('ptype').value;
+if(!worker_id||!start_date||!end_date||end_date<start_date)throw Error('Choose worker and valid food dates');
+if(periodRows.some(p=>String(p.worker_id)===worker_id&&p.start_date<=end_date&&start_date<=p.end_date))throw Error('Overlapping food period for this worker. Delete or adjust existing period.');
+if(!confirm(`Save ${workerName(worker_id)} food: ${start_date} to ${end_date}?`))return;
+await request(db.from('worker_food_periods').insert({site_id,worker_id,start_date,end_date,payment_type}).select('id'));
+await load();
+});
+$('groceries').onclick=e=>{
+const id=e.target.dataset.g;
+if(!id)return;
+act(async()=>{
+if(!confirm('Delete this grocery entry?'))return;
+await request(db.from('food_grocery').delete().eq('id',id).eq('site_id',currentSite()).select('id'));
+await load();
+});
+};
+$('periods').onclick=e=>{
+const id=e.target.dataset.p;
+if(!id)return;
+act(async()=>{
+if(!confirm('Delete this food period?'))return;
+await request(db.from('worker_food_periods').delete().eq('id',id).eq('site_id',currentSite()).select('id'));
+await load();
+});
+};
+init().catch(err);
+</script>
+</body>
+  </html>
