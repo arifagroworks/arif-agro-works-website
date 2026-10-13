@@ -1,0 +1,183 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+content="width=device-width,initial-scale=1">
+<title>Arif Agro Works V5.11</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;
+ background:#071b28;
+ color:#eef6fa;
+ font-family:Arial,sans-serif;
+}
+header{
+ background:#103044;
+ padding:17px;
+ border-bottom:3px solid #ff752e;
+}
+h2{margin:0 0 7px;font-size:21px}
+small{color:#b1c7d2}
+main{padding:12px;max-width:1100px;margin:auto}
+.box{
+ background:#103044;
+ border:1px solid #36596b;
+ border-radius:12px;
+ padding:13px;
+ margin-bottom:12px;
+}
+.tabs{
+ display:grid;
+ grid-template-columns:repeat(2,1fr);
+ gap:8px;
+}
+button{
+ background:#284b60;
+ color:white;
+ border:0;
+ border-radius:8px;
+ padding:13px 8px;
+ font-size:13px;
+ font-weight:bold;
+}
+button.active{
+ background:#ff752e;
+ color:#102330;
+}
+iframe{
+ display:block;
+ width:100%;
+ height:78vh;
+ border:1px solid #36596b;
+ border-radius:8px;
+ background:white;
+}
+p{font-size:13px;line-height:1.5}
+a{color:#90d5ff}
+</style>
+</head>
+<body>
+
+<header>
+<h2>ARIF <span style="color:#ff752e">AGRO</span> WORKS</h2>
+<small>V5.11 — Combined Management Test</small>
+</header>
+
+<main>
+
+<div class="box">
+<div class="tabs">
+<button class="active" data-page="index.html">
+Workers & Attendance
+</button>
+
+<button data-page="food-test.html?v=5905">
+Food Management
+</button>
+
+<button data-page="v510-test.html?v=51001">
+Salary & Salary Slip
+</button>
+
+<button data-page="salary-test.html?v=5905">
+Salary Reconciliation
+</button>
+</div>
+</div>
+
+<div class="box">
+<h3 id="heading">Workers & Attendance</h3>
+<p id="description">
+Original V5.8 Portal — अभी कोई बदलाव नहीं।
+</p>
+
+<iframe
+ id="portalFrame"
+ title="Arif Agro Works Portal"
+ src="./index.html">
+</iframe>
+
+<p>
+अगर फोन में Frame छोटा लगे तो
+<a id="fullLink" href="./index.html" target="_blank">
+Full Screen में खोलो
+</a>
+</p>
+</div>
+
+<div class="box">
+<p>
+<b>Safety:</b> यह Navigation Test है।
+Salary Payment Save करने से पहले
+V5.10 Salary Calculation चेक करो।
+</p>
+</div>
+
+</main>
+
+<script>
+const buttons = document.querySelectorAll(
+  '[data-page]'
+);
+
+const frame = document.getElementById(
+  'portalFrame'
+);
+
+const heading = document.getElementById(
+  'heading'
+);
+
+const description = document.getElementById(
+  'description'
+);
+
+const fullLink = document.getElementById(
+  'fullLink'
+);
+
+const titles = {
+  'index.html':'Workers & Attendance',
+  'food-test.html?v=5905':'Food Management',
+  'v510-test.html?v=51001':'Salary & Salary Slip',
+  'salary-test.html?v=5905':'Salary Reconciliation'
+};
+
+const descriptions = {
+  'index.html':
+    'Original V5.8 Portal — Live Code सुरक्षित है।',
+
+  'food-test.html?v=5905':
+    'Grocery, Food Period और Final Settlement।',
+
+  'v510-test.html?v=51001':
+    'Manual Food + Final Food के साथ Salary Preview और Slip।',
+
+  'salary-test.html?v=5905':
+    'Salary Calculation और Double Deduction Warning।'
+};
+
+buttons.forEach(button => {
+  button.addEventListener('click', () => {
+    buttons.forEach(b =>
+      b.classList.remove('active')
+    );
+
+    button.classList.add('active');
+
+    const page = button.dataset.page;
+    const url = './' + page;
+
+    frame.src = url;
+    heading.textContent = titles[page];
+    description.textContent = descriptions[page];
+    fullLink.href = url;
+  });
+});
+</script>
+
+</body>
+</html>
