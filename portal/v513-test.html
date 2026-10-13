@@ -1,0 +1,309 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arif Agro Works V5.13</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#071b28;color:#edf5fa;font-family:Arial,sans-serif}
+header{background:#103044;padding:17px;border-bottom:3px solid #ff752e}
+h2{font-size:20px;margin:0 0 7px}
+main{max-width:850px;margin:auto;padding:12px}
+.box{background:#103044;border:1px solid #36596b;border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;color:#c7dce5;font-size:13px;margin:12px 0}
+input,select{width:100%;padding:12px;margin-top:5px;background:#071e2d;border:1px solid #567487;border-radius:8px;color:white;font-size:16px}
+button{background:#ff752e;color:#102330;border:0;border-radius:8px;padding:12px;font-weight:bold}
+button:disabled{opacity:.5}
+.alt{background:#284b60;color:white}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hide{display:none}
+.card{background:#092333;border:1px solid #36596b;border-radius:9px;padding:13px;margin:12px 0}
+.status{font-size:20px;font-weight:bold}
+.good{color:#78e1a4}
+.bad{color:#ff9d86}
+small,.muted{color:#abc3ce}
+#msg{white-space:pre-wrap;overflow-wrap:anywhere;color:#ffcca5;font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+<h2>ARIF <span style="color:#ff752e">AGRO</span> WORKS</h2>
+<small>V5.13 — SALARY PAYMENT SAFETY TEST</small>
+</header>
+
+<main>
+
+<section id="loginBox" class="box">
+<h3>Master Login</h3>
+<form id="loginForm">
+<label>Email<input id="email" type="email" required></label>
+<label>Password<input id="password" type="password" required></label>
+<button id="loginBtn" disabled>Loading...</button>
+</form>
+</section>
+
+<section id="app" class="hide">
+<div class="box">
+<div id="who"></div>
+
+<label>Site
+<select id="site"></select>
+</label>
+
+<label>Worker
+<select id="worker"></select>
+</label>
+
+<div class="grid">
+<label>Salary From
+<input type="date" id="from" value="2026-10-01">
+</label>
+<label>Salary To
+<input type="date" id="to" value="2026-10-13">
+</label>
+</div>
+
+<label>Proposed Payment Amount (₹)
+<input id="amount" type="number" min="0" step="0.01" value="0">
+</label>
+
+<button id="check">Check Payment Safety</button>
+<button id="logout" class="alt">Logout</button>
+</div>
+
+<div id="result"></div>
+</section>
+
+<div class="box">
+<b>Read-only Safety Test</b>
+<p class="muted">
+No payment is saved. Finalized Food is checked
+through Supabase. This test does not replace
+database-side payment protection.
+</p>
+</div>
+
+<div id="msg"></div>
+
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const money=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2});
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const message=x=>$('msg').textContent=String(x);
+
+const SUPABASE_URL='https://qfydekphbdpvvczhimjs.supabase.co';
+const SUPABASE_KEY='sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn';
+
+let db,workers=[];
+
+const script=document.createElement('script');
+script.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+script.onload=async()=>{
+ try{
+ db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+ $('loginBtn').disabled=false;
+ $('loginBtn').textContent='Login';
+ const s=await db.auth.getSession();
+ if(s.data.session)await init();
+ }catch(e){message(e.message)}
+};
+script.onerror=()=>message('Supabase library failed to load');
+document.head.appendChild(script);
+
+$('loginForm').onsubmit=async e=>{
+ e.preventDefault();
+ $('loginBtn').disabled=true;
+ try{
+ const r=await db.auth.signInWithPassword({
+ email:$('email').value.trim(),
+ password:$('password').value
+ });
+ if(r.error)throw r.error;
+ await init();
+ }catch(e){message('Login Error: '+e.message)}
+ finally{$('loginBtn').disabled=false}
+};
+
+async function init(){
+ const u=await db.auth.getUser();
+ if(u.error)throw u.error;
+ const p=await db.from('staff_profiles')
+ .select('role,full_name')
+ .eq('user_id',u.data.user.id).single();
+ if(p.error)throw p.error;
+ if(p.data.role!=='master')throw Error('Master access required');
+
+ $('who').textContent=(p.data.full_name||'Master')+' · master';
+
+ const s=await db.from('sites')
+ .select('id,site_name')
+ .eq('is_active',true).order('site_name');
+ if(s.error)throw s.error;
+
+ $('site').innerHTML=(s.data||[]).map(x=>
+ `<option value="${esc(x.id)}">${esc(x.site_name)}</option>`
+ ).join('');
+
+ $('loginBox').classList.add('hide');
+ $('app').classList.remove('hide');
+ await loadWorkers();
+ message('Ready. No payments will be saved.');
+}
+
+async function loadWorkers(){
+ const site=$('site').value;
+ const r=await db.from('workers')
+ .select('id,full_name,daily_wage,overtime_rate')
+ .eq('site_id',site).order('full_name');
+ if(r.error)throw r.error;
+ workers=r.data||[];
+ $('worker').innerHTML=workers.map(w=>
+ `<option value="${esc(w.id)}">${esc(w.full_name)}</option>`
+ ).join('');
+ $('result').innerHTML='';
+}
+$('site').onchange=loadWorkers;
+
+async function allRows(query){
+ let out=[],offset=0;
+ while(true){
+ const r=await query.range(offset,offset+999);
+ if(r.error)throw r.error;
+ out.push(...(r.data||[]));
+ if((r.data||[]).length<1000)break;
+ offset+=1000;
+ if(offset>=10000)throw Error('Too many records; use shorter period');
+ }
+ return out;
+}
+
+$('check').onclick=async()=>{
+ const button=$('check');
+ button.disabled=true;
+ $('result').innerHTML='';
+ message('Checking...');
+
+ try{
+ const site=$('site').value;
+ const id=$('worker').value;
+ const from=$('from').value;
+ const to=$('to').value;
+ const amount=Number($('amount').value);
+ const w=workers.find(x=>String(x.id)===id);
+
+ if(!w||!from||!to||from>to)
+ throw Error('Select worker and valid period');
+
+ if(!Number.isFinite(amount)||amount<0)
+ throw Error('Enter a valid payment amount');
+
+ const [attendance,advances,payments,food]=await Promise.all([
+ allRows(db.from('worker_attendance')
+ .select('status,overtime_hours')
+ .eq('site_id',site).eq('worker_id',id)
+ .gte('attendance_date',from).lte('attendance_date',to)),
+
+ allRows(db.from('worker_advances')
+ .select('amount,notes')
+ .eq('site_id',site).eq('worker_id',id)
+ .gte('advance_date',from).lte('advance_date',to)),
+
+ allRows(db.from('worker_salary_payments')
+ .select('amount')
+ .eq('site_id',site).eq('worker_id',id)
+ .gte('payment_date',from).lte('payment_date',to)),
+
+ db.rpc('get_final_food_deductions',{
+ p_site_id:site,p_start:from,p_end:to
+ })
+ ]);
+
+ if(food.error)throw Error(
+ 'Finalized Food verification failed: '+food.error.message
+ );
+
+ const days=attendance.reduce((n,x)=>
+ n+(x.status==='present'?1:x.status==='half_day'?.5:0),0);
+
+ const ot=attendance.reduce((n,x)=>
+ n+Number(x.overtime_hours||0),0);
+
+ const gross=days*Number(w.daily_wage||0)+
+ ot*Number(w.overtime_rate||0);
+
+ const manualFood=advances.filter(x=>
+ String(x.notes||'').trim().toUpperCase().startsWith('FOOD:')
+ ).reduce((n,x)=>n+Number(x.amount||0),0);
+
+ const advance=advances.filter(x=>
+ !String(x.notes||'').trim().toUpperCase().startsWith('FOOD:')
+ ).reduce((n,x)=>n+Number(x.amount||0),0);
+
+ const finalFood=(food.data||[])
+ .filter(x=>String(x.worker_id)===id)
+ .reduce((n,x)=>n+Number(x.deduction_amount||0),0);
+
+ const paid=payments.reduce((n,x)=>n+Number(x.amount||0),0);
+ const balance=gross-advance-manualFood-finalFood-paid;
+
+ const eligible=balance>0 && amount>0 && amount<=balance;
+ const available=Math.max(0,balance);
+
+ $('result').innerHTML=`
+ <div class="box">
+ <h3>${esc(w.full_name)} — Payment Safety</h3>
+ <div class="card">
+ Paid Days: ${days}<br>
+ OT Hours: ${ot}<br>
+ Gross Salary: ${money(gross)}<br>
+ Advance: −${money(advance)}<br>
+ Manual Food: −${money(manualFood)}<br>
+ Finalized Food: −${money(finalFood)}<br>
+ Already Paid: −${money(paid)}
+ <hr>
+ <b>Balance: ${money(balance)}</b><br>
+ Maximum Payable: ${money(available)}<br>
+ Proposed Payment: ${money(amount)}
+ </div>
+ <div class="card">
+ <div class="status ${eligible?'good':'bad'}">
+ ${eligible?'ELIGIBLE FOR REVIEW':'PAYMENT BLOCKED'}
+ </div>
+ <p class="muted">
+ ${eligible?
+ 'Preview passed. Server-side verification is still required before saving.':
+ 'Zero, negative, or excessive payments are not eligible.'}
+ </p>
+ </div>
+ <p class="muted">
+ TEST ONLY — No payment has been saved.
+ Current wage rates and transaction dates are used.
+ </p>
+ </div>`;
+
+ message('Safety check complete. No data changed.');
+
+ }catch(e){
+ message('Safety Error: '+e.message);
+ }finally{
+ button.disabled=false;
+ }
+};
+
+$('logout').onclick=async()=>{
+ await db.auth.signOut();
+ $('app').classList.add('hide');
+ $('loginBox').classList.remove('hide');
+ message('Logged out');
+};
+
+window.onunhandledrejection=e=>
+ message('Error: '+(e.reason?.message||e.reason));
+</script>
+</body>
+</html>
