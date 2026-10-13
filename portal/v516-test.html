@@ -1,0 +1,304 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arif Agro Works V5.16</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#071b28;color:#eef6fa;
+ font-family:Arial,sans-serif
+}
+header{
+ background:#103044;padding:16px;
+ border-bottom:3px solid #ff752e
+}
+h2{margin:0 0 7px;font-size:20px}
+small{color:#abc3ce}
+main{padding:10px;max-width:1100px;margin:auto}
+nav{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{
+ padding:12px 8px;border:0;border-radius:8px;
+ background:#284b60;color:white;font-weight:bold
+}
+button.active{background:#ff752e;color:#102330}
+.box{
+ background:#103044;border:1px solid #36596b;
+ border-radius:10px;padding:12px;margin-bottom:12px
+}
+iframe{
+ width:100%;height:82vh;border:0;
+ border-radius:8px;background:#071b28
+}
+#status{font-size:13px;color:#ffcca5;white-space:pre-wrap}
+a{color:#9bdcff}
+.hide{display:none}
+</style>
+</head>
+<body>
+
+<header>
+<h2>ARIF <span style="color:#ff752e">AGRO</span> WORKS</h2>
+<small>V5.16 — INTEGRATED PORTAL TEST</small>
+</header>
+
+<main>
+
+<div class="box">
+<nav>
+<button id="portalBtn" class="active">
+Main Management Portal
+</button>
+<button id="foodBtn">
+Food Management
+</button>
+</nav>
+<p id="status">Loading integrated portal...</p>
+</div>
+
+<div class="box">
+<iframe id="screen" title="Management Portal"></iframe>
+</div>
+
+</main>
+
+<script>
+const frame=document.getElementById('screen');
+const status=document.getElementById('status');
+const portalBtn=document.getElementById('portalBtn');
+const foodBtn=document.getElementById('foodBtn');
+
+let integratedHTML='';
+
+function setActive(food){
+ portalBtn.classList.toggle('active',!food);
+ foodBtn.classList.toggle('active',food);
+}
+
+function replaceRequired(source,oldText,newText,label){
+ if(!source.includes(oldText)){
+   throw Error('V5.8 structure changed: '+label);
+ }
+ return source.replace(oldText,newText);
+}
+
+async function preparePortal(){
+ const response=await fetch('./index.html?v=51601',{
+   cache:'no-store'
+ });
+
+ if(!response.ok){
+   throw Error('Original V5.8 not available');
+ }
+
+ let html=await response.text();
+
+ if(!html.includes('PRIVATE MANAGEMENT PORTAL')){
+   throw Error('Unexpected original portal');
+ }
+
+ // Replace the original salary data function.
+ const start=html.indexOf(
+   'async function salaryData(site,from,to,id='
+ );
+
+ const end=html.indexOf(
+   'function calculateWorker(w,data)',
+   start
+ );
+
+ if(start<0||end<0){
+   throw Error('Salary data function not found');
+ }
+
+ const salaryDataCode=`
+async function salaryData(site,from,to,id='all'){
+ if(!from||!to||from>to){
+   throw Error('Invalid salary dates');
+ }
+
+ let a=db.from('worker_attendance')
+   .select('worker_id,status,overtime_hours')
+   .eq('site_id',site)
+   .gte('attendance_date',from)
+   .lte('attendance_date',to);
+
+ let b=db.from('worker_advances')
+   .select('worker_id,amount,notes')
+   .eq('site_id',site)
+   .gte('advance_date',from)
+   .lte('advance_date',to);
+
+ let c=db.from('worker_salary_payments')
+   .select('worker_id,amount')
+   .eq('site_id',site)
+   .gte('payment_date',from)
+   .lte('payment_date',to);
+
+ if(id!=='all'){
+   a=a.eq('worker_id',id);
+   b=b.eq('worker_id',id);
+   c=c.eq('worker_id',id);
+ }
+
+ const result=await Promise.all([
+   a.range(0,9999),
+   b.range(0,9999),
+   c.range(0,9999),
+   db.rpc('get_final_food_deductions',{
+     p_site_id:site,
+     p_start:from,
+     p_end:to
+   })
+ ]);
+
+ for(const r of result){
+   if(r.error)throw r.error;
+ }
+
+ for(const r of result.slice(0,3)){
+   if(r.data.length===10000){
+     throw Error('Use shorter salary period');
+   }
+ }
+
+ return {
+   attendance:result[0].data||[],
+   advances:result[1].data||[],
+   payments:result[2].data||[],
+   finalFood:result[3].data||[]
+ };
+}
+`;
+
+ html=html.slice(0,start)+salaryDataCode+html.slice(end);
+
+ // Replace shared worker salary calculation.
+ const calcStart=html.indexOf(
+   'function calculateWorker(w,data)'
+ );
+
+ const calcEnd=html.indexOf(
+   'async function fullWorkers(site)',
+   calcStart
+ );
+
+ if(calcStart<0||calcEnd<0){
+   throw Error('Worker salary function not found');
+ }
+
+ const calculationCode=`
+function calculateWorker(w,data){
+ const match=x=>String(x.worker_id)===String(w.id);
+
+ const att=data.attendance.filter(match);
+ const adv=data.advances.filter(match);
+ const pay=data.payments.filter(match);
+ const final=data.finalFood.filter(match);
+
+ const days=att.reduce((n,x)=>
+   n+(x.status==='present'?1:
+   x.status==='half_day'?0.5:0),0);
+
+ const ot=att.reduce((n,x)=>
+   n+Number(x.overtime_hours||0),0);
+
+ const wage=days*Number(w.daily_wage||0);
+ const otPay=ot*Number(w.overtime_rate||0);
+
+ const isFood=x=>String(x.notes||'')
+   .trim().toUpperCase().startsWith('FOOD:');
+
+ const manualFood=adv.filter(isFood)
+   .reduce((n,x)=>n+Number(x.amount||0),0);
+
+ const advance=adv.filter(x=>!isFood(x))
+   .reduce((n,x)=>n+Number(x.amount||0),0);
+
+ const finalFood=final.reduce((n,x)=>
+   n+Number(x.deduction_amount||0),0);
+
+ const paid=pay.reduce((n,x)=>
+   n+Number(x.amount||0),0);
+
+ const gross=wage+otPay;
+ const food=manualFood+finalFood;
+ const due=gross-advance-food-paid;
+
+ return {
+   days,ot,wage,otPay,
+   manualFood,finalFood,food,
+   advance,paid,gross,due
+ };
+}
+`;
+
+ html=html.slice(0,calcStart)+
+   calculationCode+html.slice(calcEnd);
+
+ // Show manual and finalized food separately in summary.
+ html=replaceRequired(
+   html,
+   'Advance \${cash(x.advance)} · Food \${cash(x.food)} · Salary Paid \${cash(x.paid)}',
+   'Advance \${cash(x.advance)} · Manual Food \${cash(x.manualFood)} · Finalized Food \${cash(x.finalFood)} · Total Food \${cash(x.food)} · Salary Paid \${cash(x.paid)}',
+   'Salary Summary food breakdown'
+ );
+
+ // Show separate deductions in printed salary slip.
+ html=replaceRequired(
+   html,
+   '<tr><td>Food Deduction</td><td>− \${cash(x.food)}</td></tr>',
+   '<tr><td>Manual Food</td><td>− \${cash(x.manualFood)}</td></tr><tr><td>Finalized Food</td><td>− \${cash(x.finalFood)}</td></tr><tr><th>Total Food Deduction</th><th>− \${cash(x.food)}</th></tr>',
+   'Salary Slip food breakdown'
+ );
+
+ // Temporarily hide salary payment entry.
+ // Database lock remains the final safety barrier.
+ html=replaceRequired(
+   html,
+   "let allowed=tabs.filter(x=>role==='master'||!['summary','slip','salary','ledger'].includes(x[0]));",
+   "let allowed=tabs.filter(x=>x[0]!=='salary'&&(role==='master'||!['summary','slip','salary','ledger'].includes(x[0])));",
+   'Salary payment lock'
+ );
+
+ // Update version label in test copy only.
+ html=html.replace(
+   'PRIVATE MANAGEMENT PORTAL · V5.8',
+   'INTEGRATED MANAGEMENT PORTAL · V5.16 TEST'
+ );
+
+ return html;
+}
+
+portalBtn.onclick=()=>{
+ setActive(false);
+ if(integratedHTML){
+   frame.srcdoc=integratedHTML;
+   status.textContent=
+     'Integrated V5.16 loaded. Salary payments locked.';
+ }
+};
+
+foodBtn.onclick=()=>{
+ setActive(true);
+ frame.removeAttribute('srcdoc');
+ frame.src='./food-test.html?v=5905';
+ status.textContent='Food Management V5.9';
+};
+
+(async()=>{
+ try{
+   integratedHTML=await preparePortal();
+   frame.srcdoc=integratedHTML;
+   status.textContent=
+     'V5.16 integrated portal ready. Payment saving locked.';
+ }catch(e){
+   status.textContent='Integration Error: '+e.message;
+ }
+})();
+</script>
+
+</body>
+</html>
