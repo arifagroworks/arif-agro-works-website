@@ -1,0 +1,470 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arif Agro Works | Salary Test</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f1f5f9;color:#17263c;font-family:Arial,sans-serif}
+header{background:#142d43;color:white;padding:20px}
+header h2{margin:0 0 5px}
+main{max-width:1100px;margin:auto;padding:12px}
+.card{background:white;padding:16px;border-radius:12px;margin:12px 0;box-shadow:0 2px 12px #0001}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+label{display:flex;flex-direction:column;gap:6px;flex:1;min-width:150px}
+input,select,button{font-size:15px;padding:11px;border:1px solid #ccd5df;border-radius:8px;max-width:100%}
+button{background:#12734f;color:white;font-weight:bold;border:0;cursor:pointer}
+.secondary{background:#475569}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid #e2e8f0;padding:10px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+.scroll{overflow-x:auto}
+.warn{color:#ad371b;font-weight:bold}
+.ok{color:#12734f;font-weight:bold}
+.muted{color:#64748b}
+#app{display:none}
+#message{white-space:pre-wrap}
+</style>
+</head>
+<body>
+
+<header>
+<h2>ARIF AGRO WORKS</h2>
+<div>V5.9 — Salary & Food Reconciliation Test</div>
+</header>
+
+<main>
+
+<section id="login" class="card">
+<h3>Master Login</h3>
+<div class="row">
+<label>Email
+<input id="email" type="email">
+</label>
+<label>Password
+<input id="password" type="password">
+</label>
+<button id="loginBtn">Login</button>
+</div>
+</section>
+
+<section id="app">
+
+<div class="card">
+<h3>Salary Preview</h3>
+<div class="row">
+<label>Site
+<select id="site"></select>
+</label>
+<label>From
+<input id="from" type="date">
+</label>
+<label>To
+<input id="to" type="date">
+</label>
+<button id="calculateBtn">Calculate Salary</button>
+<button id="logoutBtn" class="secondary">Logout</button>
+</div>
+<p class="muted">Read-only test. कोई Salary Payment Save नहीं होगा।</p>
+</div>
+
+<div class="card">
+<h3>Salary Summary</h3>
+<div id="stats"></div>
+<div class="scroll">
+<table>
+<thead>
+<tr>
+<th>Worker</th>
+<th>Days</th>
+<th>OT</th>
+<th>Gross</th>
+<th>Advance</th>
+<th>Manual Food</th>
+<th>Final Food</th>
+<th>Payments</th>
+<th>Balance</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody id="result"></tbody>
+</table>
+</div>
+</div>
+
+<div class="card">
+<h3>Reconciliation Warnings</h3>
+<div id="warnings">Calculate Salary दबाओ।</div>
+</div>
+
+</section>
+
+<div id="message" class="card muted">Checking Login...</div>
+
+</main>
+
+<script>
+const SUPABASE_URL =
+'https://qfydekphbdpvvczhimjs.supabase.co';
+
+const SUPABASE_KEY =
+'sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn';
+
+const db = supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+
+const $ = id => document.getElementById(id);
+const num = n => Number(n || 0);
+
+const money = n => '₹' + num(n).toLocaleString('en-IN', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+
+const esc = s => String(s ?? '').replace(
+  /[&<>"']/g,
+  c => ({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  }[c])
+);
+
+function msg(text, error=false) {
+  $('message').textContent = text;
+  $('message').className = 'card ' +
+    (error ? 'warn' : 'muted');
+}
+
+function localDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+const today = new Date();
+
+$('from').value = localDate(
+  new Date(today.getFullYear(),today.getMonth(),1)
+);
+$('to').value = localDate(today);
+
+async function getAll(table, columns, site, extra) {
+  const result = [];
+
+  for(let offset=0; offset<10000; offset+=1000) {
+    let q = db.from(table)
+      .select(columns)
+      .eq('site_id',site)
+      .range(offset,offset+999);
+
+    if(extra) q = extra(q);
+
+    const {data,error} = await q;
+
+    if(error) {
+      throw new Error(table + ': ' + error.message);
+    }
+
+    result.push(...data);
+
+    if(data.length < 1000) return result;
+  }
+
+  throw new Error('Too many records in ' + table);
+}
+
+async function start() {
+  const {data:{user},error} = await db.auth.getUser();
+
+  if(error || !user) {
+    $('login').style.display = 'block';
+    $('app').style.display = 'none';
+    msg('Master Admin Login करो।');
+    return;
+  }
+
+  const profile = await db.from('staff_profiles')
+    .select('role')
+    .eq('user_id',user.id)
+    .single();
+
+  if(profile.error || profile.data?.role !== 'master') {
+    $('login').style.display = 'block';
+    $('app').style.display = 'none';
+    msg('Only Master Admin can access this page.',true);
+    return;
+  }
+
+  const {data:sites,error:siteError} =
+    await db.from('sites')
+      .select('id,site_name')
+      .order('site_name');
+
+  if(siteError) throw new Error(siteError.message);
+
+  $('site').innerHTML = (sites || []).map(s =>
+    `<option value="${esc(s.id)}">${esc(s.site_name)}</option>`
+  ).join('');
+
+  $('login').style.display = 'none';
+  $('app').style.display = 'block';
+  msg('Site और Date चुनकर Calculate Salary दबाओ।');
+}
+
+$('loginBtn').onclick = async () => {
+  try {
+    msg('Logging in...');
+
+    const {error} = await db.auth.signInWithPassword({
+      email: $('email').value.trim(),
+      password: $('password').value
+    });
+
+    if(error) throw new Error(error.message);
+
+    await start();
+  } catch(e) {
+    msg(e.message,true);
+  }
+};
+
+$('logoutBtn').onclick = async () => {
+  await db.auth.signOut();
+  await start();
+};
+
+$('calculateBtn').onclick = async () => {
+  try {
+    const site = $('site').value;
+    const from = $('from').value;
+    const to = $('to').value;
+
+    if(!site || !from || !to || from > to) {
+      throw new Error('Valid Site और Date Range चुनो।');
+    }
+
+    msg('Loading salary data...');
+    $('result').innerHTML = '';
+    $('warnings').textContent = 'Checking...';
+
+    const [workers,attendance,advances,payments,settlements] =
+      await Promise.all([
+        getAll(
+          'workers',
+          'id,full_name,daily_wage,overtime_rate',
+          site
+        ),
+        getAll(
+          'worker_attendance',
+          'worker_id,attendance_date,status,overtime_hours',
+          site,
+          q => q.gte('attendance_date',from)
+                .lte('attendance_date',to)
+        ),
+        getAll(
+          'worker_advances',
+          'worker_id,advance_date,amount,notes',
+          site,
+          q => q.gte('advance_date',from)
+                .lte('advance_date',to)
+        ),
+        getAll(
+          'worker_salary_payments',
+          'worker_id,payment_date,amount',
+          site,
+          q => q.gte('payment_date',from)
+                .lte('payment_date',to)
+        ),
+        getAll(
+          'food_settlements',
+          'id,period_start,period_end,status',
+          site,
+          q => q.eq('status','final')
+                .lte('period_start',to)
+                .gte('period_end',from)
+        )
+      ]);
+
+    const warnings = [];
+
+    const partial = settlements.filter(s =>
+      s.period_start < from || s.period_end > to
+    );
+
+    if(partial.length) {
+      warnings.push(
+        'Salary Date Range किसी Final Food Settlement ' +
+        'को बीच से काट रही है। पूरा Settlement Period चुनो।'
+      );
+    }
+
+    let finalFoodRows = [];
+
+    if(!partial.length) {
+      const {data,error} = await db.rpc(
+        'get_final_food_deductions',
+        {
+          p_site_id:site,
+          p_start:from,
+          p_end:to
+        }
+      );
+
+      if(error) {
+        throw new Error('Final Food: ' + error.message);
+      }
+
+      finalFoodRows = data || [];
+    }
+
+    const finalFoodMap = new Map(
+      finalFoodRows.map(r => [
+        r.worker_id,
+        num(r.deduction_amount)
+      ])
+    );
+
+    const workerMap = new Map();
+
+    workers.forEach(w => {
+      workerMap.set(w.id,{
+        worker:w,
+        days:0,
+        ot:0,
+        advance:0,
+        manualFood:0,
+        payment:0
+      });
+    });
+
+    attendance.forEach(a => {
+      const w = workerMap.get(a.worker_id);
+      if(!w) return;
+
+      if(a.status === 'present') w.days += 1;
+      else if(a.status === 'half_day') w.days += 0.5;
+
+      w.ot += num(a.overtime_hours);
+    });
+
+    advances.forEach(a => {
+      const w = workerMap.get(a.worker_id);
+      if(!w) return;
+
+      if(/^FOOD:/i.test((a.notes || '').trim())) {
+        w.manualFood += num(a.amount);
+      } else {
+        w.advance += num(a.amount);
+      }
+    });
+
+    payments.forEach(p => {
+      const w = workerMap.get(p.worker_id);
+      if(w) w.payment += num(p.amount);
+    });
+
+    let grossTotal = 0;
+    let manualTotal = 0;
+    let finalTotal = 0;
+    let conflicts = 0;
+
+    const rows = [];
+
+    for(const [id,w] of workerMap) {
+      const finalFood = finalFoodMap.get(id) || 0;
+
+      const gross =
+        w.days * num(w.worker.daily_wage) +
+        w.ot * num(w.worker.overtime_rate);
+
+      const conflict =
+        finalFood > 0 && w.manualFood > 0;
+
+      const review =
+        conflict || partial.length > 0;
+
+      if(conflict) {
+        conflicts++;
+
+        warnings.push(
+          w.worker.full_name +
+          ': Manual FOOD ' + money(w.manualFood) +
+          ' और Final FOOD ' + money(finalFood) +
+          ' दोनों मौजूद हैं। Double Deduction जाँचो।'
+        );
+      }
+
+      const balance =
+        gross -
+        w.advance -
+        w.manualFood -
+        finalFood -
+        w.payment;
+
+      grossTotal += gross;
+      manualTotal += w.manualFood;
+      finalTotal += finalFood;
+
+      rows.push(`
+        <tr>
+          <td>${esc(w.worker.full_name)}</td>
+          <td>${w.days}</td>
+          <td>${w.ot}</td>
+          <td>${money(gross)}</td>
+          <td>${money(w.advance)}</td>
+          <td>${money(w.manualFood)}</td>
+          <td>${partial.length ? '—' : money(finalFood)}</td>
+          <td>${money(w.payment)}</td>
+          <td class="${review ? 'warn' : ''}">
+            ${review ? 'REVIEW' : money(balance)}
+          </td>
+          <td class="${review ? 'warn' : 'ok'}">
+            ${review ? 'Review Required' : 'Preview'}
+          </td>
+        </tr>
+      `);
+    }
+
+    $('result').innerHTML =
+      rows.join('') ||
+      '<tr><td colspan="10">No Workers Found</td></tr>';
+
+    $('stats').innerHTML = `
+      <p><b>Workers:</b> ${workers.length}</p>
+      <p><b>Gross Salary:</b> ${money(grossTotal)}</p>
+      <p><b>Manual Food:</b> ${money(manualTotal)}</p>
+      <p><b>Final Food:</b>
+      ${partial.length ? 'Unavailable' : money(finalTotal)}</p>
+      <p><b>Conflicts:</b> ${conflicts}</p>
+    `;
+
+    $('warnings').innerHTML = warnings.length
+      ? warnings.map(w =>
+          `<p class="warn">⚠ ${esc(w)}</p>`
+        ).join('')
+      : '<p class="ok">No obvious Food Conflict. ' +
+        'V5.8 Salary से मिलान अभी जरूरी है।</p>';
+
+    msg('Salary Preview Loaded. No data changed.');
+
+  } catch(e) {
+    msg(e.message,true);
+    $('warnings').textContent =
+      'Calculation could not be completed.';
+  }
+};
+
+start().catch(e => msg(e.message,true));
+</script>
+
+</body>
+</html>
