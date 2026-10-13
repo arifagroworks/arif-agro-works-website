@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arif Agro Works V5.19</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#071b28;color:#eef6fa;font-family:Arial,sans-serif}
+header{background:#103044;border-bottom:3px solid #ff752e;padding:16px}
+h2{margin:0 0 5px;font-size:20px}
+small{color:#abc3ce}
+main{padding:10px;max-width:1100px;margin:auto}
+nav{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+button{padding:12px 7px;border:0;border-radius:8px;background:#284b60;color:white;font-weight:bold;cursor:pointer}
+button.active,.save{background:#ff752e;color:#102330}
+.box{background:#103044;border:1px solid #36596b;border-radius:10px;padding:12px;margin-bottom:10px}
+iframe{width:100%;height:83vh;border:0;border-radius:8px;background:#071b28}
+label{display:block;font-size:13px;color:#c7dce5;margin:12px 0}
+input,select,textarea{width:100%;padding:12px;margin-top:5px;border:1px solid #567487;border-radius:7px;background:#071e2d;color:white;font-size:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}
+.hide{display:none!important}
+#message{white-space:pre-wrap;overflow-wrap:anywhere;color:#ffcca5;font-size:13px}
+.card{padding:12px;background:#092333;border:1px solid #36596b;border-radius:8px;margin:10px 0}
+button:disabled{opacity:.5}
+</style>
+</head>
+<body>
+<header>
+<h2>ARIF <span style="color:#ff752e">AGRO</span> WORKS</h2>
+<small>V5.19 — INTEGRATED MANAGEMENT & PAYROLL</small>
+</header>
+
+<main>
+<div class="box">
+<nav>
+<button id="mainBtn" class="active">Management</button>
+<button id="foodBtn">Food</button>
+<button id="payBtn">Salary Payment</button>
+</nav>
+</div>
+
+<div id="frameBox" class="box">
+<iframe id="screen" src="./v518-test.html"></iframe>
+</div>
+
+<section id="paymentBox" class="box hide">
+<h2>Salary Payment</h2>
+<p><small>Master Admin only · Database Balance Guard enabled</small></p>
+<div id="message">Connecting...</div>
+
+<div id="payApp" class="hide">
+<label>Site
+<select id="site"></select>
+</label>
+
+<label>Worker
+<select id="worker"></select>
+</label>
+
+<div class="grid">
+<label>Period From
+<input type="date" id="from">
+</label>
+<label>Period To
+<input type="date" id="to">
+</label>
+</div>
+
+<label>Payment Date
+<input type="date" id="paymentDate">
+</label>
+
+<label>Amount ₹
+<input type="number" id="amount" min="0.01" step="0.01" placeholder="Enter payment amount">
+</label>
+
+<label>Notes
+<textarea id="notes" rows="2" placeholder="Salary payment details"></textarea>
+</label>
+
+<button id="save" class="save">Save Salary Payment</button>
+<button id="refresh">Refresh Payment History</button>
+
+<h3>Previous Salary Payments</h3>
+<div id="history"></div>
+</div>
+</section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const today=()=>{
+ const d=new Date();
+ return new Date(d.getTime()-d.getTimezoneOffset()*60000)
+  .toISOString().slice(0,10);
+};
+const money=n=>'₹'+Number(n||0).toLocaleString('en-IN',{
+ maximumFractionDigits:2
+});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({
+ '&':'&amp;','<':'&lt;','>':'&gt;',
+ '"':'&quot;',"'":'&#39;'
+}[c]));
+
+let db=null,master=false,sites=[],workers=[];
+let busy=false;
+
+function message(s){$('message').textContent=s}
+
+function show(which){
+ $('mainBtn').classList.toggle('active',which==='main');
+ $('foodBtn').classList.toggle('active',which==='food');
+ $('payBtn').classList.toggle('active',which==='pay');
+
+ $('frameBox').classList.toggle('hide',which==='pay');
+ $('paymentBox').classList.toggle('hide',which!=='pay');
+
+ if(which==='main'&&$('screen').dataset.page!=='main'){
+  $('screen').src='./v518-test.html';
+  $('screen').dataset.page='main';
+ }
+
+ if(which==='food'&&$('screen').dataset.page!=='food'){
+  $('screen').src='./food-test.html';
+  $('screen').dataset.page='food';
+ }
+
+ if(which==='pay')initPayment();
+}
+
+$('mainBtn').onclick=()=>show('main');
+$('foodBtn').onclick=()=>show('food');
+$('payBtn').onclick=()=>show('pay');
+$('screen').dataset.page='main';
+
+const script=document.createElement('script');
+script.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+script.onload=()=>{
+ db=window.supabase.createClient(
+  'https://qfydekphbdpvvczhimjs.supabase.co',
+  'sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn'
+ );
+ message('Open Salary Payment to load your account.');
+};
+script.onerror=()=>message('Supabase library loading failed.');
+document.head.appendChild(script);
+
+$('from').value=today().slice(0,7)+'-01';
+$('to').value=today();
+$('paymentDate').value=today();
+
+async function initPayment(){
+ if(!db){
+  message('Loading login service...');
+  return;
+ }
+
+ try{
+  const auth=await db.auth.getUser();
+  if(auth.error)throw auth.error;
+  if(!auth.data.user){
+   $('payApp').classList.add('hide');
+   message('Please login through Management Portal first, then reopen Salary Payment.');
+   return;
+  }
+
+  const profile=await db.from('staff_profiles')
+   .select('role')
+   .eq('user_id',auth.data.user.id)
+   .single();
+
+  if(profile.error)throw profile.error;
+  master=profile.data.role==='master';
+
+  if(!master){
+   $('payApp').classList.add('hide');
+   message('Only Master Admin can save salary payments.');
+   return;
+  }
+
+  const result=await db.from('sites')
+   .select('id,site_name')
+   .eq('is_active',true)
+   .order('site_name');
+
+  if(result.error)throw result.error;
+
+  const selected=$('site').value;
+  sites=result.data||[];
+
+  $('site').innerHTML=sites.map(s=>
+   `<option value="${esc(s.id)}">${esc(s.site_name)}</option>`
+  ).join('');
+
+  if(sites.some(s=>s.id===selected))$('site').value=selected;
+
+  $('payApp').classList.remove('hide');
+  message('Master Admin verified. Database Guard will check every payment.');
+
+  await loadWorkers();
+
+ }catch(e){
+  message('Login / Loading Error: '+e.message);
+ }
+}
+
+async function loadWorkers(){
+ const site=$('site').value;
+ if(!site)return;
+
+ const result=await db.from('workers')
+  .select('id,full_name,is_deleted,is_active')
+  .eq('site_id',site)
+  .order('full_name');
+
+ if(result.error){
+  message(result.error.message);
+  return;
+ }
+
+ workers=(result.data||[]).filter(w=>!w.is_deleted);
+
+ $('worker').innerHTML=workers.map(w=>
+  `<option value="${esc(w.id)}">${esc(w.full_name)}${w.is_active===false?' (Inactive)':''}</option>`
+ ).join('');
+
+ await loadHistory();
+}
+
+async function loadHistory(){
+ const site=$('site').value;
+ const worker=$('worker').value;
+
+ if(!site||!worker){
+  $('history').textContent='Select worker.';
+  return;
+ }
+
+ const result=await db.from('worker_salary_payments')
+  .select('id,payment_date,period_start,period_end,amount,notes')
+  .eq('site_id',site)
+  .eq('worker_id',worker)
+  .order('payment_date',{ascending:false})
+  .limit(100);
+
+ if(result.error){
+  $('history').textContent=result.error.message;
+  return;
+ }
+
+ const rows=result.data||[];
+
+ $('history').innerHTML=rows.length
+  ?rows.map(x=>`
+   <div class="card">
+    <b>${money(x.amount)}</b>
+    <div><small>Paid: ${esc(x.payment_date)}</small></div>
+    <div><small>Period: ${esc(x.period_start)} to ${esc(x.period_end)}</small></div>
+    <div><small>${esc(x.notes||'')}</small></div>
+   </div>
+  `).join('')
+  :'<p>No salary payments found.</p>';
+}
+
+$('site').onchange=loadWorkers;
+$('worker').onchange=loadHistory;
+$('refresh').onclick=loadHistory;
+
+$('save').onclick=async()=>{
+ if(busy||!db||!master)return;
+
+ const site=$('site').value;
+ const worker=$('worker').value;
+ const from=$('from').value;
+ const to=$('to').value;
+ const paymentDate=$('paymentDate').value;
+ const amount=Number($('amount').value);
+ const notes=$('notes').value.trim();
+
+ if(!site||!worker||!from||!to||!paymentDate){
+  message('Complete all required fields.');
+  return;
+ }
+
+ if(from>to||paymentDate<from||paymentDate>to){
+  message('Payment date must be inside the selected salary period.');
+  return;
+ }
+
+ if(!Number.isFinite(amount)||amount<=0){
+  message('Enter a valid positive amount.');
+  return;
+ }
+
+ if(!confirm(
+  'Save salary payment '+money(amount)+
+  '?\n\nDatabase will verify available balance.'
+ ))return;
+
+ busy=true;
+ $('save').disabled=true;
+ message('Checking balance and saving...');
+
+ try{
+  const result=await db.from('worker_salary_payments')
+   .insert({
+    site_id:site,
+    worker_id:worker,
+    period_start:from,
+    period_end:to,
+    payment_date:paymentDate,
+    amount:amount,
+    notes:notes||null
+   })
+   .select('id');
+
+  if(result.error)throw result.error;
+
+  if(!result.data?.length)
+   throw Error('Payment was not confirmed by database.');
+
+  message('Salary Payment Saved Successfully: '+money(amount));
+  $('amount').value='';
+  $('notes').value='';
+  await loadHistory();
+
+ }catch(e){
+  message('PAYMENT NOT SAVED:\n'+e.message);
+ }finally{
+  busy=false;
+  $('save').disabled=false;
+ }
+};
+</script>
+</body>
+</html>
