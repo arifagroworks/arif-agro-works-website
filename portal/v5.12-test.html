@@ -1,0 +1,967 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arif Agro Works V5.12 Test</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#071b28;color:#eef6fa;font-family:Arial,sans-serif}
+header{background:#103044;border-bottom:3px solid #ff752e;padding:17px}
+h2{font-size:21px;margin:0 0 8px}
+h3{font-size:17px}
+small,.muted{color:#abc3ce}
+main{max-width:1000px;margin:auto;padding:12px}
+.box{background:#103044;border:1px solid #36596b;border-radius:12px;padding:14px;margin-bottom:12px}
+.card{background:#092333;border:1px solid #36596b;border-radius:9px;padding:12px;margin:10px 0}
+label{display:block;margin:11px 0;font-size:13px;color:#c7dce5}
+input,select{width:100%;padding:12px;margin-top:5px;border:1px solid #567487;border-radius:8px;background:#071e2d;color:white;font-size:16px}
+button{background:#ff752e;color:#102330;border:0;border-radius:8px;padding:12px;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.5}
+.alt{background:#284b60;color:white}
+.active{background:#ff752e!important;color:#102330!important}
+.tabs{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hide{display:none!important}
+.msg{color:#ffcca5;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:10px 7px;border:1px solid #547080;text-align:left}
+th{background:#284b60}
+.wrap{overflow-x:auto}
+.slip{background:white;color:#111;padding:16px;border-radius:9px;margin-top:12px}
+.slip h2,.slip h3{text-align:center}
+.slip th{background:#eee;color:#111}
+.slip td,.slip th{border-color:#999}
+.slip .muted{color:#555}
+iframe{width:100%;height:75vh;border:1px solid #567487;border-radius:8px;background:white}
+a{color:#9bdbff}
+.total{font-size:19px;color:#ffb17c}
+.note{font-size:12px;line-height:1.6;color:#abc3ce}
+</style>
+</head>
+
+<body>
+
+<header>
+<h2>ARIF <span style="color:#ff752e">AGRO</span> WORKS</h2>
+<small>V5.12 · INTEGRATED SALARY TEST</small>
+</header>
+
+<main>
+
+<section id="loginBox" class="box">
+<h3>Master Admin Login</h3>
+<form id="loginForm">
+<label>Email
+<input id="email" type="email" required>
+</label>
+<label>Password
+<input id="password" type="password" required>
+</label>
+<button id="loginBtn" disabled>Loading...</button>
+</form>
+<p id="loginMsg" class="msg">Starting...</p>
+</section>
+
+<section id="app" class="hide">
+
+<div class="box">
+<div id="who"></div>
+
+<label>Site
+<select id="site"></select>
+</label>
+
+<div class="tabs">
+<button class="active" data-tab="summary">
+Salary Summary
+</button>
+<button class="alt" data-tab="slip">
+Salary Slip
+</button>
+<button class="alt" data-tab="food">
+Food Management
+</button>
+<button class="alt" data-tab="old">
+Original V5.8 Portal
+</button>
+</div>
+
+<button class="alt" id="logout">
+Logout
+</button>
+</div>
+
+<div id="content" class="box"></div>
+
+</section>
+
+<div id="notice" class="msg"></div>
+
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const esc = x => String(x ?? '').replace(
+  /[&<>"']/g,
+  c => ({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  }[c])
+);
+
+const money = x => '₹' + Number(x || 0)
+  .toLocaleString('en-IN',{
+    maximumFractionDigits:2
+  });
+
+const today = () => {
+  const d = new Date();
+  return new Date(
+    d.getTime() - d.getTimezoneOffset()*60000
+  ).toISOString().slice(0,10);
+};
+
+const show = msg => {
+  $('notice').textContent = String(msg);
+};
+
+let db;
+let role = '';
+let sites = [];
+let currentTab = 'summary';
+let workers = [];
+
+const SUPABASE_URL =
+  'https://qfydekphbdpvvczhimjs.supabase.co';
+
+const SUPABASE_KEY =
+  'sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn';
+
+function loadLibrary(){
+  const urls = [
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+    'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js'
+  ];
+
+  let index = 0;
+
+  function next(){
+    if(window.supabase?.createClient){
+      start();
+      return;
+    }
+
+    if(index >= urls.length){
+      $('loginMsg').textContent =
+        'Supabase library loading failed';
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = urls[index++];
+    script.onload = next;
+    script.onerror = next;
+    document.head.appendChild(script);
+  }
+
+  next();
+}
+
+async function start(){
+  try{
+    db = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_KEY
+    );
+
+    $('loginBtn').disabled = false;
+    $('loginBtn').textContent = 'Secure Login';
+    $('loginMsg').textContent = 'Login ready';
+
+    const r = await db.auth.getSession();
+
+    if(r.error) throw r.error;
+    if(r.data.session) await initialize();
+
+  }catch(e){
+    $('loginMsg').textContent =
+      'Startup Error: ' + e.message;
+  }
+}
+
+$('loginForm').onsubmit = async e => {
+  e.preventDefault();
+
+  const button = $('loginBtn');
+  button.disabled = true;
+
+  try{
+    const r = await db.auth.signInWithPassword({
+      email:$('email').value.trim(),
+      password:$('password').value
+    });
+
+    if(r.error) throw r.error;
+
+    await initialize();
+
+  }catch(err){
+    $('loginMsg').textContent =
+      'Login Error: ' + err.message;
+  }finally{
+    button.disabled = false;
+  }
+};
+
+$('logout').onclick = async () => {
+  await db.auth.signOut();
+
+  $('app').classList.add('hide');
+  $('loginBox').classList.remove('hide');
+  show('Logged out');
+};
+
+async function initialize(){
+  const userResult = await db.auth.getUser();
+
+  if(userResult.error) throw userResult.error;
+  if(!userResult.data.user) throw Error('Login required');
+
+  const profile = await db.from('staff_profiles')
+    .select('role,full_name')
+    .eq('user_id',userResult.data.user.id)
+    .single();
+
+  if(profile.error) throw profile.error;
+
+  role = profile.data.role;
+
+  if(role !== 'master'){
+    throw Error(
+      'V5.12 Salary Test requires Master access'
+    );
+  }
+
+  const result = await db.from('sites')
+    .select('id,site_name')
+    .eq('is_active',true)
+    .order('site_name');
+
+  if(result.error) throw result.error;
+
+  sites = result.data || [];
+
+  $('who').textContent =
+    (profile.data.full_name || 'Master') +
+    ' · ' + role;
+
+  $('site').innerHTML = sites.map(s =>
+    `<option value="${esc(s.id)}">${esc(s.site_name)}</option>`
+  ).join('');
+
+  $('loginBox').classList.add('hide');
+  $('app').classList.remove('hide');
+
+  await render();
+  show('V5.12 ready');
+}
+
+$('site').onchange = render;
+
+document.querySelectorAll('[data-tab]')
+  .forEach(button => {
+    button.onclick = () => {
+      currentTab = button.dataset.tab;
+
+      document.querySelectorAll('[data-tab]')
+        .forEach(b => {
+          b.classList.toggle(
+            'active',
+            b === button
+          );
+          b.classList.toggle(
+            'alt',
+            b !== button
+          );
+        });
+
+      render();
+    };
+  });
+
+async function loadWorkers(site){
+  const r = await db.from('workers')
+    .select(
+      'id,full_name,daily_wage,overtime_rate,is_deleted'
+    )
+    .eq('site_id',site)
+    .order('full_name');
+
+  if(r.error) throw r.error;
+
+  return r.data || [];
+}
+
+function workerOptions(list,all){
+  const first = all
+    ? '<option value="all">All Workers</option>'
+    : '<option value="">Select Worker</option>';
+
+  return first + list.map(w =>
+    `<option value="${esc(w.id)}">
+      ${esc(w.full_name)}
+      ${w.is_deleted ? ' (Archived)' : ''}
+    </option>`
+  ).join('');
+}
+
+async function getAllRows(query){
+  let rows = [];
+  let offset = 0;
+
+  while(true){
+    const r = await query.range(
+      offset,
+      offset + 999
+    );
+
+    if(r.error) throw r.error;
+
+    const batch = r.data || [];
+    rows.push(...batch);
+
+    if(batch.length < 1000) break;
+
+    offset += 1000;
+
+    if(offset >= 10000){
+      throw Error(
+        'Too many records. Select shorter period.'
+      );
+    }
+  }
+
+  return rows;
+}
+
+async function getSalaryData(site,from,to,id){
+  if(!from || !to || from > to){
+    throw Error('Select valid date range');
+  }
+
+  let attendance = db.from('worker_attendance')
+    .select('worker_id,status,overtime_hours')
+    .eq('site_id',site)
+    .gte('attendance_date',from)
+    .lte('attendance_date',to);
+
+  let advances = db.from('worker_advances')
+    .select('worker_id,amount,notes')
+    .eq('site_id',site)
+    .gte('advance_date',from)
+    .lte('advance_date',to);
+
+  let payments = db.from('worker_salary_payments')
+    .select('worker_id,amount')
+    .eq('site_id',site)
+    .gte('payment_date',from)
+    .lte('payment_date',to);
+
+  if(id !== 'all'){
+    attendance = attendance.eq('worker_id',id);
+    advances = advances.eq('worker_id',id);
+    payments = payments.eq('worker_id',id);
+  }
+
+  const results = await Promise.all([
+    getAllRows(attendance),
+    getAllRows(advances),
+    getAllRows(payments),
+
+    db.rpc('get_final_food_deductions',{
+      p_site_id:site,
+      p_start:from,
+      p_end:to
+    })
+  ]);
+
+  const finalResult = results[3];
+
+  if(finalResult.error){
+    throw Error(
+      'Finalized Food verification failed: ' +
+      finalResult.error.message
+    );
+  }
+
+  return {
+    attendance:results[0],
+    advances:results[1],
+    payments:results[2],
+    finalFood:finalResult.data || []
+  };
+}
+
+function calculateWorker(worker,data){
+  const match = row =>
+    String(row.worker_id) === String(worker.id);
+
+  const att = data.attendance.filter(match);
+  const adv = data.advances.filter(match);
+  const pay = data.payments.filter(match);
+  const final = data.finalFood.filter(match);
+
+  const days = att.reduce((sum,row) =>
+    sum + (
+      row.status === 'present' ? 1 :
+      row.status === 'half_day' ? 0.5 : 0
+    ),0
+  );
+
+  const ot = att.reduce((sum,row) =>
+    sum + Number(row.overtime_hours || 0),0
+  );
+
+  const wage = days * Number(
+    worker.daily_wage || 0
+  );
+
+  const otPay = ot * Number(
+    worker.overtime_rate || 0
+  );
+
+  const manualFood = adv
+    .filter(row =>
+      String(row.notes || '')
+        .trim()
+        .toUpperCase()
+        .startsWith('FOOD:')
+    )
+    .reduce((sum,row) =>
+      sum + Number(row.amount || 0),0
+    );
+
+  const advance = adv
+    .filter(row =>
+      !String(row.notes || '')
+        .trim()
+        .toUpperCase()
+        .startsWith('FOOD:')
+    )
+    .reduce((sum,row) =>
+      sum + Number(row.amount || 0),0
+    );
+
+  const finalizedFood = final.reduce(
+    (sum,row) =>
+      sum + Number(row.deduction_amount || 0),
+    0
+  );
+
+  const paid = pay.reduce(
+    (sum,row) =>
+      sum + Number(row.amount || 0),
+    0
+  );
+
+  const gross = wage + otPay;
+
+  const totalFood = manualFood + finalizedFood;
+
+  const due =
+    gross - advance - totalFood - paid;
+
+  return {
+    days,
+    ot,
+    wage,
+    otPay,
+    gross,
+    advance,
+    manualFood,
+    finalizedFood,
+    totalFood,
+    paid,
+    due,
+    review:manualFood > 0 && finalizedFood > 0
+  };
+}
+
+async function render(){
+  const site = $('site').value;
+
+  if(!site) return;
+
+  $('content').innerHTML =
+    '<p class="muted">Loading...</p>';
+
+  try{
+    if(currentTab === 'old'){
+      renderOldPortal();
+      return;
+    }
+
+    if(currentTab === 'food'){
+      renderFoodPortal();
+      return;
+    }
+
+    workers = await loadWorkers(site);
+
+    if(currentTab === 'summary'){
+      renderSummary(site);
+    }else if(currentTab === 'slip'){
+      renderSlip(site);
+    }
+
+  }catch(e){
+    show('Error: ' + e.message);
+  }
+}
+
+function renderOldPortal(){
+  $('content').innerHTML = `
+    <h2>Original V5.8 Portal</h2>
+    <p class="note">
+      Workers, Attendance, Reports, Advances,
+      Expenses and Cash Ledger remain in V5.8.
+    </p>
+    <iframe
+      src="./index.html"
+      title="Original Portal">
+    </iframe>
+    <p>
+      <a href="./index.html" target="_blank">
+        Open Full Screen
+      </a>
+    </p>
+    <p class="note">
+      Do not save salary payments until
+      finalized food is reconciled.
+    </p>
+  `;
+}
+
+function renderFoodPortal(){
+  $('content').innerHTML = `
+    <h2>Food Management</h2>
+    <p class="note">
+      Existing tested Food Management V5.9.
+      Do not finalize an already finalized period again.
+    </p>
+    <iframe
+      src="./food-test.html?v=5905"
+      title="Food Management">
+    </iframe>
+    <p>
+      <a href="./food-test.html?v=5905"
+         target="_blank">
+        Open Full Screen
+      </a>
+    </p>
+  `;
+}
+
+function periodFields(prefix){
+  const d = today();
+
+  return `
+    <div class="grid">
+      <label>From
+        <input
+          id="${prefix}From"
+          type="date"
+          value="${d.slice(0,7)}-01">
+      </label>
+
+      <label>To
+        <input
+          id="${prefix}To"
+          type="date"
+          value="${d}">
+      </label>
+    </div>
+  `;
+}
+
+function renderSummary(site){
+  $('content').innerHTML = `
+    <h2>V5.12 Salary Summary</h2>
+
+    <label>Worker
+      <select id="sumWorker">
+        ${workerOptions(workers,true)}
+      </select>
+    </label>
+
+    ${periodFields('sum')}
+
+    <button id="calculate">
+      Calculate Salary
+    </button>
+
+    <p class="note">
+      Manual Food and Finalized Food are
+      deducted separately, once each.
+      Current wage rates apply.
+    </p>
+
+    <div id="summaryResult"></div>
+  `;
+
+  $('calculate').onclick = async () => {
+    const button = $('calculate');
+
+    const id = $('sumWorker').value;
+    const from = $('sumFrom').value;
+    const to = $('sumTo').value;
+
+    button.disabled = true;
+    show('Calculating salary...');
+
+    try{
+      const data = await getSalaryData(
+        site,from,to,id
+      );
+
+      let totalGross = 0;
+      let totalAdvance = 0;
+      let totalManualFood = 0;
+      let totalFinalFood = 0;
+      let totalPaid = 0;
+      let totalDue = 0;
+
+      const selected = workers.filter(w =>
+        id === 'all' || String(w.id) === id
+      );
+
+      const cards = selected.map(w => {
+        const x = calculateWorker(w,data);
+
+        totalGross += x.gross;
+        totalAdvance += x.advance;
+        totalManualFood += x.manualFood;
+        totalFinalFood += x.finalizedFood;
+        totalPaid += x.paid;
+        totalDue += x.due;
+
+        return `
+          <div class="card">
+            <h3>${esc(w.full_name)}</h3>
+            <small>
+              Paid Days: ${x.days} ·
+              OT: ${x.ot} hours
+            </small>
+
+            <p>
+              Wages: ${money(x.wage)}<br>
+              OT Amount: ${money(x.otPay)}<br>
+              <b>Gross: ${money(x.gross)}</b>
+            </p>
+
+            <p>
+              Advance: ${money(x.advance)}<br>
+              Manual Food: ${money(x.manualFood)}<br>
+              Finalized Food: ${money(x.finalizedFood)}<br>
+              Total Food: ${money(x.totalFood)}<br>
+              Already Paid: ${money(x.paid)}
+            </p>
+
+            <b class="total">
+              Balance: ${money(x.due)}
+            </b>
+
+            ${x.review ? `
+              <p class="note">
+                Review: Manual and Finalized Food
+                both exist. Verify they are
+                separate expenses.
+              </p>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+
+      $('summaryResult').innerHTML = `
+        ${cards}
+
+        <div class="card">
+          <h3>Salary Totals</h3>
+          <p>
+            Gross: ${money(totalGross)}<br>
+            Advances: ${money(totalAdvance)}<br>
+            Manual Food: ${money(totalManualFood)}<br>
+            Finalized Food: ${money(totalFinalFood)}<br>
+            Salary Paid: ${money(totalPaid)}
+          </p>
+
+          <b class="total">
+            Total Balance: ${money(totalDue)}
+          </b>
+        </div>
+      `;
+
+      show('Salary calculation complete');
+
+    }catch(e){
+      show('Salary Error: ' + e.message);
+      $('summaryResult').innerHTML = '';
+    }finally{
+      button.disabled = false;
+    }
+  };
+}
+
+function renderSlip(site){
+  $('content').innerHTML = `
+    <h2>V5.12 Worker Salary Slip</h2>
+
+    <label>Worker
+      <select id="slipWorker">
+        ${workerOptions(workers,false)}
+      </select>
+    </label>
+
+    ${periodFields('slip')}
+
+    <button id="generateSlip">
+      Generate Salary Slip
+    </button>
+
+    <button id="printSlip"
+            class="alt hide">
+      Print / Save PDF
+    </button>
+
+    <div id="slipResult"></div>
+  `;
+
+  $('generateSlip').onclick = async () => {
+    const button = $('generateSlip');
+
+    const id = $('slipWorker').value;
+    const from = $('slipFrom').value;
+    const to = $('slipTo').value;
+
+    if(!id){
+      show('Select worker');
+      return;
+    }
+
+    button.disabled = true;
+    $('printSlip').classList.add('hide');
+    $('slipResult').innerHTML = '';
+
+    try{
+      const worker = workers.find(w =>
+        String(w.id) === id
+      );
+
+      if(!worker){
+        throw Error('Worker not found');
+      }
+
+      const data = await getSalaryData(
+        site,from,to,id
+      );
+
+      const x = calculateWorker(worker,data);
+
+      const siteName = sites.find(s =>
+        String(s.id) === String(site)
+      )?.site_name || 'Site';
+
+      $('slipResult').innerHTML = `
+        <div class="slip" id="slipPaper">
+
+          <h2>ARIF AGRO WORKS</h2>
+          <h3>WORKER SALARY SLIP</h3>
+
+          <p>
+            <b>Site:</b> ${esc(siteName)}<br>
+            <b>Worker:</b> ${esc(worker.full_name)}<br>
+            <b>Period:</b>
+            ${esc(from)} to ${esc(to)}
+          </p>
+
+          <div class="wrap">
+          <table>
+            <tr>
+              <th>Description</th>
+              <th>Amount / Value</th>
+            </tr>
+
+            <tr>
+              <td>Daily Wage</td>
+              <td>${money(worker.daily_wage)}</td>
+            </tr>
+
+            <tr>
+              <td>Paid Attendance Days</td>
+              <td>${x.days}</td>
+            </tr>
+
+            <tr>
+              <td>Wages</td>
+              <td>${money(x.wage)}</td>
+            </tr>
+
+            <tr>
+              <td>Overtime Hours</td>
+              <td>${x.ot}</td>
+            </tr>
+
+            <tr>
+              <td>Overtime Rate</td>
+              <td>${money(worker.overtime_rate)}</td>
+            </tr>
+
+            <tr>
+              <td>Overtime Amount</td>
+              <td>${money(x.otPay)}</td>
+            </tr>
+
+            <tr>
+              <th>Gross Salary</th>
+              <th>${money(x.gross)}</th>
+            </tr>
+
+            <tr>
+              <td>Advance Deduction</td>
+              <td>− ${money(x.advance)}</td>
+            </tr>
+
+            <tr>
+              <td>Manual Food Deduction</td>
+              <td>− ${money(x.manualFood)}</td>
+            </tr>
+
+            <tr>
+              <td>Finalized Food Deduction</td>
+              <td>− ${money(x.finalizedFood)}</td>
+            </tr>
+
+            <tr>
+              <td>Total Food Deduction</td>
+              <td>− ${money(x.totalFood)}</td>
+            </tr>
+
+            <tr>
+              <td>Salary Already Paid</td>
+              <td>− ${money(x.paid)}</td>
+            </tr>
+
+            <tr>
+              <th>Balance Payable</th>
+              <th>${money(x.due)}</th>
+            </tr>
+          </table>
+          </div>
+
+          <p class="muted">
+            Generated: ${esc(today())}
+          </p>
+
+          <p class="muted">
+            Current wage and OT rates used.
+            Payments and advances counted by
+            transaction date. Verify before payment.
+          </p>
+
+          ${x.review ? `
+            <p class="muted">
+              Manual and Finalized Food both
+              exist. Confirm they are separate.
+            </p>
+          ` : ''}
+
+        </div>
+      `;
+
+      $('printSlip').classList.remove('hide');
+      show('Salary slip ready');
+
+    }catch(e){
+      show('Slip Error: ' + e.message);
+    }finally{
+      button.disabled = false;
+    }
+  };
+
+  $('printSlip').onclick = () => {
+    const paper = $('slipPaper');
+
+    if(!paper) return;
+
+    const win = window.open('','_blank');
+
+    if(!win){
+      show('Allow pop-ups to print');
+      return;
+    }
+
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+      <meta charset="UTF-8">
+      <title>Salary Slip</title>
+      <style>
+        body{
+          font-family:Arial;
+          color:#111;
+          padding:18px;
+        }
+        h2,h3{text-align:center}
+        table{
+          width:100%;
+          border-collapse:collapse;
+        }
+        td,th{
+          border:1px solid #888;
+          padding:9px;
+          text-align:left;
+        }
+        th{background:#eee}
+        .muted{
+          color:#555;
+          font-size:12px;
+        }
+      </style>
+      </head>
+      <body>
+        ${paper.outerHTML}
+      </body>
+      </html>
+    `);
+
+    win.document.close();
+    win.focus();
+
+    setTimeout(() => win.print(),500);
+  };
+}
+
+window.onerror = (msg,src,line) => {
+  show('JavaScript Error line ' + line +
+       ': ' + msg);
+};
+
+window.onunhandledrejection = e => {
+  show(
+    'Error: ' +
+    (e.reason?.message || e.reason)
+  );
+};
+
+loadLibrary();
+</script>
+
+</body>
+</html>
