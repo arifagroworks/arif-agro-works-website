@@ -1,0 +1,44 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARIF AGRO WORKS - Incharge Management Fixed</title><style>:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#061b29;color:#e9f3fa;font:15px system-ui,Arial}header{background:#123447;border-bottom:3px solid #ff7b35;padding:18px}h1{font-size:19px;margin:0}main{max-width:760px;margin:20px auto;padding:0 14px}.panel{background:#113348;border:1px solid #36546a;border-radius:12px;padding:16px;margin-bottom:15px}h2{font-size:17px;margin:0 0 14px}label{display:block;color:#b7ccdb;font-size:13px;margin:12px 0 5px}input,select{width:100%;background:#071f2f;color:#fff;border:1px solid #49657a;border-radius:6px;padding:12px;font-size:15px}button{background:#ff7b35;border:0;border-radius:6px;padding:11px 14px;color:#15222b;font-weight:700;margin:10px 7px 0 0;cursor:pointer}button.secondary{background:#34596f;color:#fff}button.danger{background:#e8a2a2;color:#3a1111}button:disabled{opacity:.5}.item{padding:12px;border:1px solid #35586d;border-radius:8px;margin-top:10px;background:#082638}.small{color:#a9c1d0;font-size:12px;line-height:1.5}.notice{padding:12px;border-radius:6px;background:#082638;white-space:pre-wrap;overflow-wrap:anywhere}.ok{color:#8ae5b5}.bad{color:#ffb1a6}.hide{display:none}</style></head><body><header><h1>ARIF AGRO WORKS</h1><div class="small">Master Admin · Incharge Management (Fixed Test)</div></header><main><section class="panel" id="loginPanel"><h2>Master Admin Login</h2><label>Email</label><input id="email" type="email" autocomplete="username" placeholder="Master admin email"><label>Password</label><input id="loginPassword" type="password" autocomplete="current-password"><button id="loginBtn">Login</button><div id="loginMessage" class="small"></div></section><section class="panel hide" id="dashboard"><div style="display:flex;justify-content:space-between;align-items:center"><h2>Manage Incharges</h2><button id="logoutBtn" class="secondary">Logout</button></div><div class="notice small">Only Master Admin can manage accounts. A newly created incharge will need a site assignment before using site-specific data. This test page does not assign sites, disable logins or permanently delete accounts.</div><h2 style="margin-top:18px">Create Incharge Login</h2><label>Full Name</label><input id="fullName" placeholder="e.g. Site Supervisor"><label>Username (4–30 characters)</label><input id="username" autocomplete="off" placeholder="e.g. site1_incharge"><label>Password (minimum 8 characters)</label><input id="newPassword" type="password" autocomplete="new-password"><button id="createBtn">Create Incharge</button><h2 style="margin-top:25px">Existing Incharges</h2><button id="refreshBtn" class="secondary">Refresh List</button><div id="list"></div></section><section class="panel"><div id="status" class="notice small">Ready.</div></section></main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script><script>
+const SUPABASE_URL='https://qfydekphbdpvvczhimjs.supabase.co';
+const SUPABASE_KEY='sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn';
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+const $=id=>document.getElementById(id);
+function status(message,ok=true){$('status').textContent=message;$('status').className='notice small '+(ok?'ok':'bad')}
+function busy(id,on){$(id).disabled=on}
+async function request(action,extra={}){const {data:{session},error}=await db.auth.getSession();if(error||!session)throw Error('Please log in again.');const response=await fetch(SUPABASE_URL+'/functions/v1/manage-incharge',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':SUPABASE_KEY},body:JSON.stringify({action,...extra})});let data;try{data=await response.json()}catch{throw Error('Function returned an invalid response (HTTP '+response.status+').')}if(!response.ok||data.error||data.success===false)throw Error(data.error||data.message||'Request failed (HTTP '+response.status+')');return data}
+async function showSession(){const {data:{session}}=await db.auth.getSession();if(!session){$('loginPanel').classList.remove('hide');$('dashboard').classList.add('hide');return}const {data:profile,error}=await db.from('staff_profiles').select('role').eq('user_id',session.user.id).maybeSingle();if(error||profile?.role!=='master'){status('Only Master Admin can access this page.',false);await db.auth.signOut();$('loginPanel').classList.remove('hide');$('dashboard').classList.add('hide');return}$('loginPanel').classList.add('hide');$('dashboard').classList.remove('hide');await refresh()}
+async function refresh(){
+ busy('refreshBtn',true);$('list').textContent='Loading...';
+ try{
+  const result=await request('list');
+  const users=[result.incharges,result.accounts,result.data,result.users].find(Array.isArray)||[];
+  $('list').replaceChildren();
+  if(!users.length){$('list').textContent='No incharge accounts found.';status('List loaded successfully. No accounts found.');return;}
+  for(const u of users){
+   const el=document.createElement('div');el.className='item';
+   const name=document.createElement('strong');name.textContent=u.full_name||'Incharge';el.appendChild(name);
+   const meta=document.createElement('div');meta.className='small';
+   const username=u.username||(u.email&&u.email.endsWith('@incharge.arifagroworks.local')?u.email.split('@')[0]:null);
+   meta.textContent='Username: '+(username||'—')+' · User ID: '+(u.user_id||'—');el.appendChild(meta);
+   const reset=document.createElement('button');reset.className='secondary';reset.textContent='Reset Password';
+   reset.onclick=async()=>{
+    const password=prompt('Enter new password (minimum 8 characters) for '+(username||u.full_name)+':');
+    if(password===null)return;
+    if(password.length<8){status('Password must have at least 8 characters.',false);return;}
+    if(!confirm('Reset password for '+(username||u.full_name)+'?'))return;
+    reset.disabled=true;
+    try{const r=await request('reset_password',{user_id:u.user_id,password});status(r.message||'Password updated successfully.');}
+    catch(e){status(e.message,false)}finally{reset.disabled=false}
+   };
+   el.appendChild(reset);$('list').appendChild(el);
+  }
+  status(users.length+' incharge account(s) loaded.');
+ }catch(e){$('list').textContent='Unable to load accounts.';status(e.message,false)}
+ finally{busy('refreshBtn',false)}
+}
+$('loginBtn').onclick=async()=>{busy('loginBtn',true);try{const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('loginPassword').value});if(error)throw error;$('loginPassword').value='';await showSession()}catch(e){$('loginMessage').textContent=e.message;status(e.message,false)}finally{busy('loginBtn',false)}};
+$('logoutBtn').onclick=async()=>{await db.auth.signOut();$('loginPanel').classList.remove('hide');$('dashboard').classList.add('hide');status('Logged out')};
+$('refreshBtn').onclick=refresh;
+$('createBtn').onclick=async()=>{const full_name=$('fullName').value.trim(),username=$('username').value.trim().toLowerCase(),password=$('newPassword').value;if(!full_name||!/^[a-z0-9_-]{4,30}$/.test(username)||password.length<8){status('Enter a full name, valid username (4–30), and password (at least 8 characters).',false);return}if(!confirm('Create incharge login for '+username+'?'))return;busy('createBtn',true);try{const r=await request('create',{full_name,username,password});$('newPassword').value='';$('fullName').value='';$('username').value='';status(r.message||'Incharge created. Assign site access separately.');await refresh()}catch(e){status(e.message,false)}finally{busy('createBtn',false)}};
+showSession().catch(e=>status(e.message,false));
+</script></body></html>
