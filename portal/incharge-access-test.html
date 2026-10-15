@@ -1,0 +1,161 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARIF AGRO WORKS - Incharge Access</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f2f5fa;font-family:Arial;color:#182638}
+header{background:#102b50;color:white;text-align:center;padding:22px 12px}
+header h2{margin:0 0 7px}
+main{max-width:600px;margin:20px auto;padding:0 14px}
+.card{background:white;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 3px 12px #00000010}
+.name{font-weight:bold;margin-bottom:12px}
+button{border:0;border-radius:8px;padding:12px 16px;color:white;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.5}
+.disable{background:#b42332}
+.enable{background:#137b4a}
+#status{background:#e7effa;padding:12px;border-radius:9px;margin-bottom:15px;white-space:pre-wrap}
+.note{font-size:13px;color:#64748b;line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+<h2>ARIF AGRO WORKS</h2>
+<div>Master Admin · Incharge Access Control</div>
+</header>
+<main>
+<div id="status">Checking login...</div>
+<div id="list"></div>
+<p class="note">
+Disabling an account blocks new authentication.
+Existing sessions may require additional database protection.
+</p>
+</main>
+
+<script>
+const SB_URL="https://qfydekphbdpvvczhimjs.supabase.co";
+const SB_KEY="sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn";
+const db=supabase.createClient(SB_URL,SB_KEY);
+const statusBox=document.getElementById("status");
+const list=document.getElementById("list");
+
+function status(t){statusBox.textContent=t;}
+
+async function init(){
+  const {data:{user},error:authError}=await db.auth.getUser();
+  if(authError||!user){
+    status("Please login as Master Admin.");
+    return;
+  }
+
+  const {data:profile,error:profileError}=await db
+    .from("staff_profiles")
+    .select("role")
+    .eq("user_id",user.id)
+    .single();
+
+  if(profileError||profile?.role!=="master"){
+    status("Access denied. Master Admin only.");
+    return;
+  }
+
+  const {data:people,error}=await db
+    .from("staff_profiles")
+    .select("user_id,full_name")
+    .eq("role","incharge")
+    .order("full_name");
+
+  if(error){
+    status(error.message);
+    return;
+  }
+
+  list.replaceChildren();
+
+  for(const person of people||[]){
+    const card=document.createElement("div");
+    card.className="card";
+
+    const name=document.createElement("div");
+    name.className="name";
+    name.textContent=person.full_name||person.user_id;
+
+    const disable=document.createElement("button");
+    disable.className="disable";
+    disable.textContent="Disable Login";
+
+    const enable=document.createElement("button");
+    enable.className="enable";
+    enable.textContent="Enable Login";
+    enable.style.marginLeft="8px";
+
+    async function change(action){
+      const word=action==="disable"?"disable":"enable";
+
+      if(!confirm("Are you sure you want to "+word+
+        " login for "+(person.full_name||"this incharge")+"?")){
+        return;
+      }
+
+      disable.disabled=true;
+      enable.disabled=true;
+      status("Processing "+word+"...");
+
+      try{
+        const {data:sessionData,error:sessionError}=
+          await db.auth.getSession();
+
+        if(sessionError||!sessionData.session){
+          throw new Error("Login session expired.");
+        }
+
+        const response=await fetch(
+          SB_URL+"/functions/v1/manage-incharge-access",
+          {
+            method:"POST",
+            headers:{
+              "Content-Type":"application/json",
+              "apikey":SB_KEY,
+              "Authorization":"Bearer "+
+                sessionData.session.access_token
+            },
+            body:JSON.stringify({
+              user_id:person.user_id,
+              action
+            })
+          }
+        );
+
+        const result=await response.json();
+
+        if(!response.ok||!result.success){
+          throw new Error(result.error||"Request failed");
+        }
+
+        status(result.message+" — "+(person.full_name||"Incharge"));
+      }catch(err){
+        status("Error: "+err.message);
+      }finally{
+        disable.disabled=false;
+        enable.disabled=false;
+      }
+    }
+
+    disable.onclick=()=>change("disable");
+    enable.onclick=()=>change("enable");
+
+    card.append(name,disable,enable);
+    list.append(card);
+  }
+
+  status("Incharge list loaded. Select an action.");
+}
+
+init().catch(e=>status("Error: "+e.message));
+</script>
+</body>
+</html>
