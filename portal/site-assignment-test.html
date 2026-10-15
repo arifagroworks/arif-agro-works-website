@@ -1,0 +1,240 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARIF AGRO WORKS - Site Assignment</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f6fb; color: #17233b; font-family: Arial, sans-serif; }
+    header { background: #102b50; color: white; padding: 22px 16px; text-align: center; }
+    header h2 { margin: 0 0 6px; }
+    main { max-width: 580px; margin: 20px auto; padding: 0 14px; }
+    .card { background: white; padding: 20px; border-radius: 15px; margin-bottom: 16px; box-shadow: 0 3px 15px #102b5010; }
+    h3 { margin-top: 0; }
+    label { display: block; margin: 15px 0 7px; font-weight: bold; }
+    select, button { width: 100%; padding: 13px; border-radius: 9px; font-size: 15px; }
+    select { border: 1px solid #cbd5e1; background: white; }
+    button { border: none; background: #1463c5; color: white; font-weight: bold; margin-top: 15px; cursor: pointer; }
+    button:disabled { opacity: .55; }
+    .remove { background: #b42332; }
+    .item { padding: 12px; border: 1px solid #e2e8f0; border-radius: 9px; margin-top: 9px; }
+    .muted { color: #64748b; font-size: 13px; }
+    #message { padding: 12px; border-radius: 9px; background: #eaf1fa; margin-bottom: 16px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<header>
+  <h2>ARIF AGRO WORKS</h2>
+  <div>Master Admin · Site Assignment Test</div>
+</header>
+
+<main>
+  <div id="message">Checking Master Admin login...</div>
+
+  <section id="app" hidden>
+    <div class="card">
+      <h3>Assign Site to Incharge</h3>
+
+      <label>Choose Incharge</label>
+      <select id="incharge"></select>
+
+      <label>Choose Site</label>
+      <select id="site"></select>
+
+      <button id="assignBtn">Assign Site</button>
+      <button id="removeBtn" class="remove">Remove Assignment</button>
+    </div>
+
+    <div class="card">
+      <h3>Current Assignments</h3>
+      <div id="assignments"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const SB_URL = "https://qfydekphbdpvvczhimjs.supabase.co";
+const SB_KEY = "sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn";
+const db = window.supabase.createClient(SB_URL, SB_KEY);
+
+const $ = id => document.getElementById(id);
+let incharges = [];
+let sites = [];
+let assignments = [];
+
+function message(text) {
+  $("message").textContent = text;
+}
+
+function option(value, label) {
+  const el = document.createElement("option");
+  el.value = value;
+  el.textContent = label;
+  return el;
+}
+
+async function init() {
+  try {
+    const { data: auth, error: authError } = await db.auth.getUser();
+    if (authError || !auth.user) {
+      message("Please log in as Master Admin first.");
+      return;
+    }
+
+    const { data: profile, error: profileError } = await db
+      .from("staff_profiles")
+      .select("role")
+      .eq("user_id", auth.user.id)
+      .single();
+
+    if (profileError || profile?.role !== "master") {
+      message("Access denied. Master Admin only.");
+      return;
+    }
+
+    $("app").hidden = false;
+    await loadData();
+  } catch (err) {
+    message("Error: " + err.message);
+  }
+}
+
+async function loadData() {
+  message("Loading data...");
+
+  const [p, s, a] = await Promise.all([
+    db.from("staff_profiles")
+      .select("user_id,full_name,role")
+      .eq("role", "incharge"),
+    db.from("sites")
+      .select("id,site_name")
+      .order("site_name"),
+    db.from("site_assignments")
+      .select("user_id,site_id")
+  ]);
+
+  const error = p.error || s.error || a.error;
+  if (error) {
+    message("Unable to load: " + error.message);
+    return;
+  }
+
+  incharges = p.data || [];
+  sites = s.data || [];
+  assignments = a.data || [];
+
+  const oldIncharge = $("incharge").value;
+  const oldSite = $("site").value;
+
+  $("incharge").replaceChildren();
+  $("site").replaceChildren();
+
+  incharges.forEach(x =>
+    $("incharge").append(option(x.user_id, x.full_name || x.user_id))
+  );
+
+  sites.forEach(x =>
+    $("site").append(option(x.id, x.site_name))
+  );
+
+  if (incharges.some(x => x.user_id === oldIncharge)) {
+    $("incharge").value = oldIncharge;
+  }
+  if (sites.some(x => x.id === oldSite)) {
+    $("site").value = oldSite;
+  }
+
+  renderAssignments();
+  message("Data loaded successfully.");
+}
+
+function renderAssignments() {
+  const container = $("assignments");
+  container.replaceChildren();
+
+  if (!assignments.length) {
+    container.textContent = "No assignments found.";
+    return;
+  }
+
+  assignments.forEach(a => {
+    const person = incharges.find(x => x.user_id === a.user_id);
+    const site = sites.find(x => x.id === a.site_id);
+
+    const div = document.createElement("div");
+    div.className = "item";
+    div.textContent =
+      (person?.full_name || a.user_id) +
+      " → " +
+      (site?.site_name || a.site_id);
+
+    container.append(div);
+  });
+}
+
+async function changeAssignment(remove) {
+  const user_id = $("incharge").value;
+  const site_id = $("site").value;
+
+  if (!user_id || !site_id) {
+    message("Please select an Incharge and Site.");
+    return;
+  }
+
+  const exists = assignments.some(
+    a => a.user_id === user_id && a.site_id === site_id
+  );
+
+  if (!remove && exists) {
+    message("This site is already assigned.");
+    return;
+  }
+
+  if (remove && !exists) {
+    message("This assignment does not exist.");
+    return;
+  }
+
+  $("assignBtn").disabled = true;
+  $("removeBtn").disabled = true;
+  message("Saving...");
+
+  try {
+    const result = remove
+      ? await db.from("site_assignments")
+          .delete()
+          .eq("user_id", user_id)
+          .eq("site_id", site_id)
+          .select("user_id,site_id")
+      : await db.from("site_assignments")
+          .insert({ user_id, site_id })
+          .select("user_id,site_id");
+
+    if (result.error) throw result.error;
+
+    if (!result.data?.length) {
+      throw new Error("No assignment was changed. Check database permissions.");
+    }
+
+    await loadData();
+    message(remove
+      ? "Site assignment removed successfully."
+      : "Site assigned successfully.");
+  } catch (err) {
+    message("Action failed: " + err.message);
+  } finally {
+    $("assignBtn").disabled = false;
+    $("removeBtn").disabled = false;
+  }
+}
+
+$("assignBtn").addEventListener("click", () => changeAssignment(false));
+$("removeBtn").addEventListener("click", () => changeAssignment(true));
+
+init();
+</script>
+</body>
+</html>
