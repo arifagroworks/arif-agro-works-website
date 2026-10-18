@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Arif Agro Works Final Portal</title>
+<title>Arif Agro Works V5.34 Unified Release Candidate</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#071b28;color:#eef6fa;font-family:Arial,sans-serif}
@@ -44,7 +44,7 @@ footer{text-align:center;color:#abc3ce;font-size:12px;padding:20px}
 <body>
 <header>
 <div><b>ARIF <span style="color:#ff752e">AGRO</span> WORKS</b><br>
-<small>MANAGEMENT · FOOD · PAYROLL</small></div>
+<small>V5.34 RC · MANAGEMENT · FOOD · PAYROLL · PRODUCTION</small></div>
 <button id="logout" class="alt hide">Logout</button>
 </header>
 <main>
@@ -88,7 +88,10 @@ const tabs=[
 ['expenses','Expenses'],
 ['salary','Salary Payments'],
 ['foodmanage','Food Management'],
-['ledger','Cash Ledger']
+['production','Daily Production'],
+['billing','Company Documents'],
+['ledger','Cash Ledger'],
+['mastertools','Master Tools']
 ];
 const config={
 workers:['workers',[['full_name','Name','text',1],['mobile_number','Mobile','tel'],['joining_date','Joining','date'],['leaving_date','Leaving','date'],['daily_wage','Daily Wage','number'],['overtime_rate','OT Rate','number']]],
@@ -180,10 +183,55 @@ else
 v=`<input name="${k}" type="${type}" ${req?'required':''} ${type==='number'?'min="0" step="0.01"':''} ${type==='date'?'value="'+date()+'"':''}>`;
 return `<label>${name}${req?' *':''}${v}</label>`;
 }
+function masterTools(){
+  if(role!=='master'){
+    $('content').textContent='Master Admin only';
+    return;
+  }
+  const links=[
+    ['Incharge Management','incharge-test-fixed.html','Verified fixed listing · create accounts and reset passwords'],
+    ['Site Assignment','site-assignment-test.html','Assign or change the site allocated to an incharge'],
+    ['Incharge Access Control','incharge-access-test.html','Disable, enable and manage incharge login access'],
+    ['Food Management','food-v518-fixed.html','Active workers only for new food entries; historical records preserved'],
+    ['Salary Reconciliation','salary-test.html','Review calculations without creating salary payments'],
+    ['Salary Guard Check','v519-guard-check.html','Run authenticated Master Admin guard diagnostic; no payment is retained']
+  ];
+  $('content').innerHTML='<h2>Master Admin Tools</h2><p class="muted">Separate secured test pages. No production deployment or database changes from these shortcuts.</p>'+
+    links.map(([name,path,desc])=>`<div class="card"><h3>${esc(name)}</h3><p class="muted">${esc(desc)}</p><a style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px 14px;border-radius:8px;max-width:100%;overflow-wrap:anywhere" href="${encodeURI(path)}" target="_blank" rel="noopener noreferrer">Open ${esc(name)} ↗</a></div>`).join('')+
+    '<p class="muted">Note: Username is not shown when the source record has no username field. This does not affect the existing account. Live V5.8 remains unchanged. Salary payment saves are disabled in this test portal until the database guard is verified with an active test worker.</p>';
+}
+
+function productionPanel(site){
+  const selected=sites.find(s=>String(s.id)===String(site));
+  const siteName=selected?.name||selected?.site_name||'Selected Site';
+  const productionUrl='AAW_Daily_Production_V526_Restore_Test.html?site_id='+encodeURIComponent(String(site));
+  $('content').innerHTML=`<h2>Daily Production · V5.34</h2>
+  <p class="muted">${esc(siteName)} · Secure Supabase Production Register. The V5.26 production page independently verifies the signed-in account and assigned sites. Production entry and report are locked to this selected site. Switch sites using the main portal selector.</p>
+  <div class="card">
+    <div class="actions"><a href="${productionUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:800;padding:12px 15px;border-radius:8px;text-decoration:none">Open Full Screen / Print PDF ↗</a></div>
+    <p class="muted">Entry, Edit, Archive, Restore, History, CSV export and reports appear below. PDF printing works best in full screen. Switch the main portal site to update both the entry form and report. The embedded page may require a fresh login if the browser restricts sessions.</p>
+    <iframe title="Secure Daily Production Register" src="${productionUrl}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" style="width:100%;height:78vh;min-height:660px;border:1px solid #36596b;border-radius:9px;background:#071b28" ></iframe>
+  </div>
+  <p class="muted">V5.34 integration test · Live V5.8 unchanged · Salary payment saving locked · Daily Production bundled in deployment ZIP.</p>`;
+}
+
+function billingPanel(){
+  if(role!=='master'){
+    $('content').textContent='Master Admin only';
+    return;
+  }
+  const url='AAW_Billing_Studio_Final.html';
+  $('content').innerHTML=`<h2>Company Documents & Billing Studio</h2>
+  <p class="muted">Master Admin workspace · Approved Blue + White Corporate design. Letterhead, Invoice, Quotation, Work Proforma and Measurement Bill.</p>
+  <div class="card"><div class="actions"><a href="${url}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:800;padding:12px 15px;border-radius:8px;text-decoration:none">Open Billing Studio Full Screen ↗</a></div>
+  <p class="muted">Cloud status and online document saving are shown inside Billing Studio. Master Admin only; PDF via Print / Save as PDF. Previous V1/V2 local drafts require manual backup/import.</p>
+  <iframe title="Company Documents and Billing Studio" src="${url}" loading="lazy" style="width:100%;height:83vh;min-height:720px;border:1px solid #36596b;border-radius:9px;background:white"></iframe></div>`;
+}
+
 async function render(){
 let n=++seq,site=$('site').value;
 if(!site){$('content').textContent='No assigned sites';return}
-let allowed=tabs.filter(x=>role==='master'||!['summary','slip','salary','ledger'].includes(x[0]));
+let allowed=tabs.filter(x=>role==='master'||!['summary','slip','salary','ledger','mastertools','billing'].includes(x[0]));
 if(!allowed.some(x=>x[0]===tab))tab='workers';
 $('tabs').innerHTML=allowed.map(x=>`<button data-tab="${x[0]}" class="${tab===x[0]?'active':''}">${x[1]}</button>`).join('');
 $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
@@ -200,6 +248,9 @@ if(tab==='slip')return salarySlip(site);
 if(tab==='food')return foodDeduction(site);
 if(tab==='foodmanage')return foodManagement(site);
 if(tab==='salary')return salaryPayment(site);
+if(tab==='mastertools')return masterTools();
+if(tab==='production')return productionPanel(site);
+if(tab==='billing')return billingPanel();
 let [table,fields]=config[tab];
 let order=tab==='workers'?'created_at':(fields.find(f=>f[2]==='date')||['created_at'])[0];
 let r=await db.from(table).select('*').eq('site_id',site).order(order,{ascending:false}).limit(100);
@@ -215,10 +266,10 @@ $('rows').innerHTML=rows.length?rows.map(x=>{
 let name=x.full_name||workers.find(w=>String(w.id)===String(x.worker_id))?.full_name||x.category||x.entry_type||'Entry';
 let detail=Object.entries(x).filter(([k,v])=>!['id','site_id','worker_id','created_at'].includes(k)&&v!==null).map(([k,v])=>k+': '+v).join(' · ');
 let buttons='';
-if(tab==='workers'&&role==='master')
+if(tab==='workers')
 buttons=x.is_deleted
-?`<button data-restore="${esc(x.id)}">Restore</button>`
-:`<div class="actions"><button class="alt" data-edit="${esc(x.id)}">Edit</button><button class="alt" data-active="${esc(x.id)}">${x.is_active===false?'Reactivate':'Deactivate'}</button><button data-delete="${esc(x.id)}">Delete from List</button></div>`;
+?(role==='master'?`<button data-restore="${esc(x.id)}">Restore</button>`:'')
+:`<div class="actions"><button class="alt" data-edit="${esc(x.id)}">Edit</button><button class="alt" data-active="${esc(x.id)}">${x.is_active===false?'Reactivate':'Deactivate'}</button>${role==='master'?`<button data-delete="${esc(x.id)}">Delete from List</button>`:''}</div>`;
 return `<div class="card"><b>${esc(name)}</b><small>${esc(detail)}</small>${buttons}</div>`;
 }).join(''):'<p class="muted">No entries</p>';
 let form=$('form');
@@ -246,7 +297,7 @@ edit=null;await render();notice('Saved successfully');
 }catch(e){notice('Save Error: '+e.message);$('save').disabled=false}
 };
 }
-if(tab!=='workers'||role!=='master')return;
+if(tab!=='workers')return;
 $('rows').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{
 let x=rows.find(r=>String(r.id)===b.dataset.edit);edit=x.id;
 fields.forEach(([k])=>{if(form.elements[k])form.elements[k].value=x[k]??''});
@@ -303,7 +354,7 @@ let gross=wage+otPay,food=manualFood+finalFood,due=gross-advance-food-paid;
 return {days,ot,wage,otPay,manualFood,finalFood,food,advance,paid,gross,due};
 }
 async function fullWorkers(site){
-let r=await db.from('workers').select('id,full_name,daily_wage,overtime_rate,is_deleted').eq('site_id',site).order('full_name');
+let r=await db.from('workers').select('id,full_name,daily_wage,overtime_rate,is_deleted,is_active').eq('site_id',site).order('full_name');
 if(r.error)throw r.error;
 return r.data||[];
 }
@@ -594,15 +645,14 @@ const bytes=Uint8Array.from(atob(EMBEDDED_FOOD_HTML),c=>c.charCodeAt(0));
 return new TextDecoder().decode(bytes);
 }
 async function foodManagement(site){
-$('content').innerHTML='<h2>Food Management & Final Settlement</h2><p class="muted">Separate food session inside this standalone portal.</p><iframe id="foodFrame" title="Food Management" style="width:100%;height:85vh;border:0;background:#071b28;border-radius:8px"></iframe>';
-$('foodFrame').srcdoc=decodeFood();
+$('content').innerHTML='<h2>Food Management · V5.18</h2><p class="muted">New food periods only for active workers. Archived worker history remains available. This is a separate test module.</p><p><a href="food-v518-fixed.html" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px;border-radius:8px">Open Food Management ↗</a></p>';
 notice('Food Management loaded');
 }
 async function salaryPayment(site){
 if(role!=='master'){notice('Master only');return}
 let d=date();
-$('content').innerHTML=`<h2>Salary Payment</h2>
-<p class="muted">Database V5.20 guard checks each save. Existing payments cannot be edited.</p>
+$('content').innerHTML=`<h2>Salary Payment · Safety Preview</h2>
+<p class="muted">TEST MODE: Payment saving is disabled until the database guard is practically verified using a new active test worker. Existing payment history can be viewed. No real payment will be saved here.</p>
 <label>Worker<select id="pw"></select></label>
 <div class="grid">
 <label>Period From<input id="pf" type="date" value="${d.slice(0,7)}-01"></label>
@@ -611,10 +661,10 @@ $('content').innerHTML=`<h2>Salary Payment</h2>
 <label>Payment Date<input id="pd" type="date" value="${d}"></label>
 <label>Amount ₹<input id="pa" type="number" min="0.01" step="0.01" placeholder="Amount"></label>
 <label>Notes<input id="pn" type="text" placeholder="Optional"></label>
-<div class="actions"><button id="ps">Save Salary Payment</button><button class="alt" id="pr">Refresh History</button></div>
+<div class="actions"><button id="ps" disabled title="Awaiting practical database guard test">Save Disabled · Test Mode</button><button class="alt" id="pr">Refresh History</button></div>
 <div id="ph"></div>`;
 let list=await fullWorkers(site);
-$('pw').innerHTML=workerOptions(list.filter(x=>!x.is_deleted));
+$('pw').innerHTML=workerOptions(list.filter(x=>!x.is_deleted&&x.is_active!==false));
 const history=async()=>{
 let worker=$('pw').value;if(!worker){$('ph').textContent='Select worker';return}
 let r=await db.from('worker_salary_payments').select('payment_date,period_start,period_end,amount,notes')
@@ -624,23 +674,7 @@ $('ph').innerHTML='<h3>Previous Salary Payments</h3>'+((r.data||[]).map(x=>
 `<div class="card"><b>${cash(x.amount)}</b><small>Paid: ${esc(x.payment_date)} · Period: ${esc(x.period_start)} to ${esc(x.period_end)}</small><small>${esc(x.notes||'')}</small></div>`).join('')||'<p class="muted">No payments</p>');
 };
 $('pw').onchange=history;$('pr').onclick=history;
-$('ps').onclick=async()=>{
-let worker=$('pw').value,from=$('pf').value,to=$('pt').value,pd=$('pd').value,amount=Number($('pa').value);
-if(!worker||!from||!to||from>to||pd<from||pd>to||!Number.isFinite(amount)||amount<=0){notice('Check worker, dates and positive amount');return}
-if(!confirm('Save REAL salary payment '+cash(amount)+'?'))return;
-$('ps').disabled=true;notice('Saving with database guard...');
-try{
-let r=await db.from('worker_salary_payments').insert({
-site_id:site,worker_id:worker,period_start:from,period_end:to,
-payment_date:pd,amount,notes:$('pn').value.trim()||null
-}).select('id');
-if(r.error)throw r.error;
-if(!r.data?.length)throw Error('Payment not confirmed');
-$('pa').value='';$('pn').value='';
-await history();notice('Salary payment saved: '+cash(amount));
-}catch(e){notice('PAYMENT NOT SAVED: '+e.message)}
-finally{$('ps').disabled=false}
-};
+$('ps').onclick=()=>notice('Payment write is locked in V5.34 RC. No salary payments can be created from this build.');
 await history();
 }
 
