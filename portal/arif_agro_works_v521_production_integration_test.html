@@ -1,0 +1,683 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arif Agro Works V5.18 Integration Test</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#071b28;color:#eef6fa;font-family:Arial,sans-serif}
+header{background:#103044;border-bottom:3px solid #ff752e;padding:16px;display:flex;justify-content:space-between;align-items:center}
+h2{font-size:20px;margin:0 0 12px}
+h3{font-size:17px}
+small,.muted{color:#abc3ce}
+main{max-width:900px;margin:18px auto;padding:0 12px}
+.box{background:#103044;border:1px solid #36596b;border-radius:13px;padding:15px;margin-bottom:14px}
+label{display:block;font-size:13px;color:#c7dce5;margin:10px 0}
+input,select,textarea{width:100%;padding:11px;margin-top:5px;border:1px solid #567487;border-radius:7px;background:#071e2d;color:white;font-size:16px}
+button{padding:10px 13px;background:#ff752e;border:0;border-radius:8px;color:#102330;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.5}
+.alt{background:#284b60;color:white}
+.hide{display:none!important}
+.tabs,.actions{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+.tabs button{background:#284b60;color:white;font-size:13px}
+.tabs button.active{background:#ff752e;color:#102330}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.card{padding:12px;background:#092333;border:1px solid #36596b;border-radius:9px;margin:9px 0;overflow-wrap:anywhere}
+.card small{display:block;margin:5px 0}
+#notice,#loginMsg{white-space:pre-wrap;overflow-wrap:anywhere;color:#ffccaa;margin:12px 0;font-size:13px}
+.att{border-bottom:1px solid #36596b;padding:10px 0}
+.wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border:1px solid #36596b;padding:9px 5px;text-align:center}
+th{background:#284b60}
+th:first-child,td:first-child{text-align:left}
+.slip{background:#fff;color:#111;padding:20px;border-radius:8px;margin-top:12px}
+.slip h2,.slip h3{text-align:center}
+.slip table th{background:#eee;color:#111}
+.slip table td,.slip table th{border-color:#aaa}
+.slip .muted{color:#555}
+footer{text-align:center;color:#abc3ce;font-size:12px;padding:20px}
+</style>
+</head>
+<body>
+<header>
+<div><b>ARIF <span style="color:#ff752e">AGRO</span> WORKS</b><br>
+<small>V5.18 TEST · MANAGEMENT · FOOD · PAYROLL</small></div>
+<button id="logout" class="alt hide">Logout</button>
+</header>
+<main>
+<section id="login" class="box">
+<h2>Master / Incharge Login</h2>
+<form id="loginForm">
+<label>Email<input id="email" type="email" required></label>
+<label>Password<input id="password" type="password" required></label>
+<button id="loginBtn" disabled>Loading...</button>
+</form>
+<div id="loginMsg">Starting...</div>
+</section>
+<section id="app" class="hide">
+<div class="box">
+<div id="who"></div>
+<label>Site<select id="site"></select></label>
+<div id="tabs" class="tabs"></div>
+</div>
+<div class="box" id="content"></div>
+</section>
+<div id="notice"></div>
+</main>
+<footer>Authorized access only · Arif Agro Works</footer>
+<script>
+const $=id=>document.getElementById(id);
+const notice=t=>$('notice').textContent=String(t);
+const info=t=>$('loginMsg').textContent=String(t);
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const date=()=>{let d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
+const cash=x=>'₹'+Number(x||0).toLocaleString('en-IN',{maximumFractionDigits:2});
+const wait=(p,n=15000)=>Promise.race([p,new Promise((_,r)=>setTimeout(()=>r(Error('Request timeout')),n))]);
+let db,role='',sites=[],workers=[],tab='workers',edit=null,deleted=false,seq=0;
+const tabs=[
+['workers','Workers'],
+['summary','Salary Summary'],
+['attendance','Attendance'],
+['report','Monthly Report'],
+['slip','Salary Slip'],
+['food','Food Deduction'],
+['advances','Advances'],
+['expenses','Expenses'],
+['salary','Salary Payments'],
+['foodmanage','Food Management'],
+['production','Daily Production'],
+['ledger','Cash Ledger'],
+['mastertools','Master Tools']
+];
+const config={
+workers:['workers',[['full_name','Name','text',1],['mobile_number','Mobile','tel'],['joining_date','Joining','date'],['leaving_date','Leaving','date'],['daily_wage','Daily Wage','number'],['overtime_rate','OT Rate','number']]],
+advances:['worker_advances',[['worker_id','Worker','worker',1],['advance_date','Date','date',1],['amount','Amount','number',1],['notes','Notes','text']]],
+expenses:['site_expenses',[['expense_date','Date','date',1],['category','Category','text',1],['description','Description','text'],['amount','Amount','number',1]]],
+ledger:['site_cash_ledger',[['entry_date','Date','date',1],['entry_type','Type','cash',1],['category','Category','text',1],['description','Description','text'],['amount','Amount','number',1]]]
+};
+window.onerror=(m,s,l)=>info('JavaScript Error line '+l+': '+m);
+window.onunhandledrejection=e=>notice('Error: '+(e.reason?.message||e.reason));
+function loadLibrary(){
+const urls=[
+'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js'
+];
+let i=0;
+function next(){
+if(window.supabase?.createClient){start();return}
+if(i>=urls.length){info('Library loading failed');return}
+info('Loading Supabase '+(i+1)+'...');
+let s=document.createElement('script'),done=false;
+let timer=setTimeout(()=>{if(!done){done=true;s.remove();next()}},10000);
+s.onload=()=>{if(!done){done=true;clearTimeout(timer);next()}};
+s.onerror=()=>{if(!done){done=true;clearTimeout(timer);next()}};
+s.src=urls[i++];document.head.appendChild(s);
+}
+next();
+}
+async function start(){
+try{
+db=window.supabase.createClient(
+'https://qfydekphbdpvvczhimjs.supabase.co',
+'sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn'
+);
+$('loginBtn').disabled=false;
+$('loginBtn').textContent='Secure Login';
+info('Login service ready');
+let r=await wait(db.auth.getSession());
+if(r.data?.session)await init();
+}catch(e){info('Startup Error: '+e.message)}
+}
+$('loginForm').onsubmit=async e=>{
+e.preventDefault();
+let b=$('loginBtn');
+b.disabled=true;b.textContent='Logging in...';
+info('Checking credentials...');
+try{
+let r=await wait(db.auth.signInWithPassword({
+email:$('email').value.trim(),password:$('password').value
+}));
+if(r.error)throw r.error;
+await init();
+}catch(x){info('Login Error: '+x.message)}
+finally{b.disabled=false;b.textContent='Secure Login'}
+};
+$('logout').onclick=async()=>{
+await db.auth.signOut();
+$('app').classList.add('hide');
+$('login').classList.remove('hide');
+$('logout').classList.add('hide');
+info('Logged out');
+};
+$('site').onchange=()=>{edit=null;deleted=false;render()};
+async function init(){
+let u=await wait(db.auth.getUser());
+if(u.error)throw u.error;
+if(!u.data.user)return;
+let p=await wait(db.from('staff_profiles').select('role,full_name').eq('user_id',u.data.user.id).single());
+if(p.error)throw p.error;
+role=p.data.role;
+let s=await wait(db.from('sites').select('id,site_name').eq('is_active',true).order('site_name'));
+if(s.error)throw s.error;
+sites=s.data||[];
+$('who').textContent=(p.data.full_name||'Staff')+' · '+role;
+$('site').innerHTML=sites.map(x=>`<option value="${esc(x.id)}">${esc(x.site_name)}</option>`).join('');
+$('login').classList.add('hide');
+$('app').classList.remove('hide');
+$('logout').classList.remove('hide');
+await render();notice('Portal ready');
+}
+function field(f){
+let [k,name,type,req]=f,v='';
+if(type==='worker')
+v='<select name="'+k+'" required><option value="">Select Worker</option>'+
+workers.filter(w=>!w.is_deleted&&w.is_active!==false)
+.map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}</option>`).join('')+'</select>';
+else if(type==='cash')
+v='<select name="'+k+'"><option value="cash_in">Cash In</option><option value="cash_out">Cash Out</option></select>';
+else
+v=`<input name="${k}" type="${type}" ${req?'required':''} ${type==='number'?'min="0" step="0.01"':''} ${type==='date'?'value="'+date()+'"':''}>`;
+return `<label>${name}${req?' *':''}${v}</label>`;
+}
+function masterTools(){
+  if(role!=='master'){
+    $('content').textContent='Master Admin only';
+    return;
+  }
+  const links=[
+    ['Incharge Management','incharge-test-fixed.html','Verified fixed listing · create accounts and reset passwords'],
+    ['Site Assignment','site-assignment-test.html','Assign or change the site allocated to an incharge'],
+    ['Incharge Access Control','incharge-access-test.html','Disable, enable and manage incharge login access'],
+    ['Food Management','food-v518-fixed.html','Active workers only for new food entries; historical records preserved'],
+    ['Salary Reconciliation','salary-test.html','Review calculations without creating salary payments'],
+    ['Salary Guard Check','v519-guard-check.html','Run authenticated Master Admin guard diagnostic; no payment is retained']
+  ];
+  $('content').innerHTML='<h2>Master Admin Tools · V5.21</h2><p class="muted">Separate secured test pages. No production deployment or database changes from these shortcuts.</p>'+
+    links.map(([name,path,desc])=>`<div class="card"><h3>${esc(name)}</h3><p class="muted">${esc(desc)}</p><a style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px 14px;border-radius:8px;max-width:100%;overflow-wrap:anywhere" href="${encodeURI(path)}" target="_blank" rel="noopener noreferrer">Open ${esc(name)} ↗</a></div>`).join('')+
+    '<p class="muted">Note: Username is not shown when the source record has no username field. This does not affect the existing account. Live V5.8 remains unchanged. Salary payment saves are disabled in this test portal until the database guard is verified with an active test worker.</p>';
+}
+
+function productionPanel(site){
+  const selected=sites.find(s=>String(s.id)===String(site));
+  const siteName=selected?.name||selected?.site_name||'Selected Site';
+  $('content').innerHTML=`<h2>Daily Production · V5.21</h2>
+  <p class="muted">Secure online production register for ${esc(siteName)}. The connected V4 page checks your Supabase login and assigned sites independently. Master Admin can access authorized sites; Incharge sees assigned sites only.</p>
+  <div class="card"><h3>Production Entry &amp; Reports</h3>
+  <p class="muted">Work / Activity, Quantity, Rate, Measurements, Team, and full Work Description / Remarks. Export Excel CSV or Print / Save PDF.</p>
+  <a href="AAW_Daily_Production_V4_Supabase_Test.html" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:800;padding:13px 16px;border-radius:9px;text-decoration:none">Open Secure Daily Production ↗</a>
+  <p class="muted">Opens in a separate tab for reliable mobile PDF printing. Production records are saved to Supabase, not to this test portal's local storage.</p></div>
+  <p class="muted">Test integration only. Live portal V5.8 is unchanged. Salary payment saving remains disabled.</p>`;
+}
+
+async function render(){
+let n=++seq,site=$('site').value;
+if(!site){$('content').textContent='No assigned sites';return}
+let allowed=tabs.filter(x=>role==='master'||!['summary','slip','salary','ledger','mastertools'].includes(x[0]));
+if(!allowed.some(x=>x[0]===tab))tab='workers';
+$('tabs').innerHTML=allowed.map(x=>`<button data-tab="${x[0]}" class="${tab===x[0]?'active':''}">${x[1]}</button>`).join('');
+$('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+tab=b.dataset.tab;edit=null;deleted=false;render();
+});
+let w=await db.from('workers').select('id,full_name,is_active,is_deleted').eq('site_id',site).order('full_name');
+if(n!==seq)return;
+if(w.error){notice(w.error.message);return}
+workers=w.data||[];
+if(tab==='summary')return summary(site);
+if(tab==='attendance')return attendance(site);
+if(tab==='report')return monthlyReport(site);
+if(tab==='slip')return salarySlip(site);
+if(tab==='food')return foodDeduction(site);
+if(tab==='foodmanage')return foodManagement(site);
+if(tab==='salary')return salaryPayment(site);
+if(tab==='mastertools')return masterTools();
+if(tab==='production')return productionPanel(site);
+let [table,fields]=config[tab];
+let order=tab==='workers'?'created_at':(fields.find(f=>f[2]==='date')||['created_at'])[0];
+let r=await db.from(table).select('*').eq('site_id',site).order(order,{ascending:false}).limit(100);
+if(n!==seq)return;
+if(r.error){notice(r.error.message);return}
+let rows=(r.data||[]).filter(x=>tab!=='workers'||(deleted?x.is_deleted===true:x.is_deleted!==true));
+let can=role==='master'||['workers','advances','expenses'].includes(tab);
+$('content').innerHTML=`<h2>${allowed.find(x=>x[0]===tab)[1]}</h2>
+${tab==='workers'&&role==='master'?`<button id="showDeleted" class="alt">${deleted?'Show Workers':'Deleted Workers / Restore'}</button>`:''}
+<div id="rows"></div><h3 id="formTitle">New Entry</h3><form id="form" class="grid"></form>`;
+if($('showDeleted'))$('showDeleted').onclick=()=>{deleted=!deleted;edit=null;render()};
+$('rows').innerHTML=rows.length?rows.map(x=>{
+let name=x.full_name||workers.find(w=>String(w.id)===String(x.worker_id))?.full_name||x.category||x.entry_type||'Entry';
+let detail=Object.entries(x).filter(([k,v])=>!['id','site_id','worker_id','created_at'].includes(k)&&v!==null).map(([k,v])=>k+': '+v).join(' · ');
+let buttons='';
+if(tab==='workers'&&role==='master')
+buttons=x.is_deleted
+?`<button data-restore="${esc(x.id)}">Restore</button>`
+:`<div class="actions"><button class="alt" data-edit="${esc(x.id)}">Edit</button><button class="alt" data-active="${esc(x.id)}">${x.is_active===false?'Reactivate':'Deactivate'}</button><button data-delete="${esc(x.id)}">Delete from List</button></div>`;
+return `<div class="card"><b>${esc(name)}</b><small>${esc(detail)}</small>${buttons}</div>`;
+}).join(''):'<p class="muted">No entries</p>';
+let form=$('form');
+if(!can||(tab==='workers'&&deleted))
+form.innerHTML='<p class="muted">No entry form available</p>';
+else{
+form.innerHTML=fields.map(field).join('')+'<div class="actions"><button id="save">Save Entry</button><button type="button" class="alt" id="cancel">Cancel Edit</button></div>';
+$('cancel').onclick=()=>{edit=null;render()};
+form.onsubmit=async e=>{
+e.preventDefault();$('save').disabled=true;
+let data={site_id:site};
+fields.forEach(([k,,type])=>{
+let v=form.elements[k].value;
+if(v!=='')data[k]=type==='number'?Number(v):v;
+else if(edit&&tab==='workers')data[k]=null;
+});
+try{
+let q=edit&&tab==='workers'
+?db.from(table).update(data).eq('id',edit).eq('site_id',site).select('id')
+:db.from(table).insert(data).select('id');
+let r=await q;
+if(r.error)throw r.error;
+if(!r.data?.length)throw Error('Permission denied');
+edit=null;await render();notice('Saved successfully');
+}catch(e){notice('Save Error: '+e.message);$('save').disabled=false}
+};
+}
+if(tab!=='workers'||role!=='master')return;
+$('rows').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{
+let x=rows.find(r=>String(r.id)===b.dataset.edit);edit=x.id;
+fields.forEach(([k])=>{if(form.elements[k])form.elements[k].value=x[k]??''});
+$('formTitle').textContent='Edit '+x.full_name;
+$('save').textContent='Update Worker';
+form.scrollIntoView({behavior:'smooth'});
+});
+$('rows').querySelectorAll('[data-active]').forEach(b=>b.onclick=async()=>{
+let x=rows.find(r=>String(r.id)===b.dataset.active),active=x.is_active===false;
+if(!confirm((active?'Reactivate ':'Deactivate ')+x.full_name+'?'))return;
+let r=await db.from('workers').update({is_active:active}).eq('id',x.id).eq('site_id',site).select('id');
+if(r.error||!r.data?.length){notice(r.error?.message||'Update denied');return}
+await render();notice('Worker updated');
+});
+$('rows').querySelectorAll('[data-delete],[data-restore]').forEach(b=>b.onclick=async()=>{
+let restoring=!!b.dataset.restore,id=b.dataset.restore||b.dataset.delete;
+let x=rows.find(r=>String(r.id)===String(id));
+if(!confirm((restoring?'Restore ':'Delete from list: ')+x.full_name+'?'))return;
+let data=restoring?{is_deleted:false,deleted_at:null}:{is_deleted:true,deleted_at:new Date().toISOString()};
+let r=await db.from('workers').update(data).eq('id',id).eq('site_id',site).eq('is_deleted',restoring).select('id');
+if(r.error||!r.data?.length){notice(r.error?.message||'Update denied');return}
+await render();notice(restoring?'Restored':'Deleted from list; history kept');
+});
+}
+
+/* Shared salary calculation */
+async function salaryData(site,from,to,id='all'){
+if(!from||!to||from>to)throw Error('Invalid salary dates');
+let a=db.from('worker_attendance').select('worker_id,status,overtime_hours').eq('site_id',site).gte('attendance_date',from).lte('attendance_date',to);
+let b=db.from('worker_advances').select('worker_id,amount,notes').eq('site_id',site).gte('advance_date',from).lte('advance_date',to);
+let c=db.from('worker_salary_payments').select('worker_id,amount').eq('site_id',site).lte('period_start',to).gte('period_end',from);
+if(id!=='all'){a=a.eq('worker_id',id);b=b.eq('worker_id',id);c=c.eq('worker_id',id)}
+const r=await Promise.all([
+ a.range(0,9999),b.range(0,9999),c.range(0,9999),
+ db.rpc('get_final_food_deductions',{p_site_id:site,p_start:from,p_end:to})
+]);
+for(const x of r){if(x.error)throw x.error}
+for(const x of r.slice(0,3)){if(x.data.length===10000)throw Error('Use shorter salary period')}
+return {attendance:r[0].data||[],advances:r[1].data||[],payments:r[2].data||[],finalFood:r[3].data||[]};
+}
+function calculateWorker(w,data){
+let match=x=>String(x.worker_id)===String(w.id);
+let att=data.attendance.filter(match),adv=data.advances.filter(match),pay=data.payments.filter(match);
+let final=(data.finalFood||[]).filter(match);
+let days=att.reduce((n,x)=>n+(x.status==='present'?1:x.status==='half_day'?0.5:0),0);
+let ot=att.reduce((n,x)=>n+Number(x.overtime_hours||0),0);
+let wage=days*Number(w.daily_wage||0),otPay=ot*Number(w.overtime_rate||0);
+let isFood=x=>String(x.notes||'').trim().toUpperCase().startsWith('FOOD:');
+let manualFood=adv.filter(isFood).reduce((n,x)=>n+Number(x.amount||0),0);
+let advance=adv.filter(x=>!isFood(x)).reduce((n,x)=>n+Number(x.amount||0),0);
+let finalFood=final.reduce((n,x)=>n+Number(x.deduction_amount||0),0);
+let paid=pay.reduce((n,x)=>n+Number(x.amount||0),0);
+let gross=wage+otPay,food=manualFood+finalFood,due=gross-advance-food-paid;
+return {days,ot,wage,otPay,manualFood,finalFood,food,advance,paid,gross,due};
+}
+async function fullWorkers(site){
+let r=await db.from('workers').select('id,full_name,daily_wage,overtime_rate,is_deleted,is_active').eq('site_id',site).order('full_name');
+if(r.error)throw r.error;
+return r.data||[];
+}
+function workerOptions(list,all=false){
+return (all?'<option value="all">All Workers</option>':'<option value="">Select Worker</option>')+
+list.map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}${w.is_deleted?' (Archived)':''}</option>`).join('');
+}
+async function summary(site){
+let d=date();
+$('content').innerHTML=`<h2>Salary Summary</h2>
+<label>Worker<select id="sw"></select></label>
+<div class="grid">
+<label>From<input type="date" id="sf" value="${d.slice(0,7)}-01"></label>
+<label>To<input type="date" id="st" value="${d}"></label>
+</div>
+<button id="calc">Calculate Salary</button>
+<p class="muted">Present = 1, Half Day = 0.5. Current wage rates apply. Food is deducted only once.</p>
+<div id="results"></div>`;
+try{
+let list=await fullWorkers(site);
+$('sw').innerHTML=workerOptions(list,true);
+$('calc').onclick=async()=>{
+let from=$('sf').value,to=$('st').value,id=$('sw').value;
+if(!from||!to||from>to){notice('Select valid dates');return}
+$('calc').disabled=true;notice('Calculating...');
+try{
+let data=await salaryData(site,from,to,id),total=0;
+$('results').innerHTML=list.filter(w=>id==='all'||String(w.id)===id).map(w=>{
+let x=calculateWorker(w,data);total+=x.due;
+return `<div class="card"><b>${esc(w.full_name)}</b>
+<small>Paid Days: ${x.days} · OT: ${x.ot} hours</small>
+<small>Wages ${cash(x.wage)} + OT ${cash(x.otPay)}</small>
+<small>Advance ${cash(x.advance)} · Manual Food ${cash(x.manualFood)} · Final Food ${cash(x.finalFood)} · Salary Paid ${cash(x.paid)}</small>
+<b>Balance: ${cash(x.due)}</b></div>`;
+}).join('')+`<div class="card"><b>Total Balance: ${cash(total)}</b></div>`;
+notice('Calculation complete');
+}catch(e){notice('Salary Error: '+e.message)}
+finally{$('calc').disabled=false}
+};
+}catch(e){notice('Salary Error: '+e.message)}
+}
+async function attendance(site){
+let active=workers.filter(w=>!w.is_deleted&&w.is_active!==false);
+$('content').innerHTML=`<h2>Bulk Attendance</h2>
+<label>Date<input type="date" id="ad" value="${date()}"></label>
+<div class="actions">
+<button id="load" class="alt">Load Attendance</button>
+<button id="present" class="alt">Mark All Present</button>
+</div>
+<div id="alist"></div><button id="saveAtt" disabled>Save All Attendance</button>`;
+let saved=new Map(),loaded='',duplicates=false;
+async function load(){
+loaded='';$('saveAtt').disabled=true;
+try{
+let day=$('ad').value;
+let r=await db.from('worker_attendance').select('id,worker_id,status,overtime_hours').eq('site_id',site).eq('attendance_date',day).range(0,9999);
+if(r.error)throw r.error;
+if(r.data.length===10000)throw Error('Too many records');
+saved=new Map();duplicates=false;
+r.data.forEach(x=>{
+let k=String(x.worker_id);
+if(saved.has(k))duplicates=true;else saved.set(k,x);
+});
+$('alist').innerHTML=active.map(w=>{
+let x=saved.get(String(w.id)),s=x?.status||'present';
+return `<div class="att" data-id="${esc(w.id)}"><b>${esc(w.full_name)}</b><div class="grid">
+<label>Status<select class="as">${[['present','Present'],['absent','Absent'],['half_day','Half Day'],['leave','Leave']].map(([v,n])=>`<option value="${v}" ${s===v?'selected':''}>${n}</option>`).join('')}</select></label>
+<label>OT Hours<input class="ao" type="number" min="0" step="0.5" value="${Number(x?.overtime_hours||0)}"></label></div></div>`;
+}).join('');
+$('alist').querySelectorAll('.as').forEach(s=>s.onchange=()=>{
+if(['absent','leave'].includes(s.value))s.closest('.att').querySelector('.ao').value=0;
+});
+loaded=day;$('saveAtt').disabled=duplicates||!active.length;
+notice(duplicates?'Duplicate attendance found; saving disabled':'Attendance loaded: '+day);
+}catch(e){notice('Load Error: '+e.message)}
+}
+$('load').onclick=load;
+$('ad').onchange=()=>{loaded='';$('saveAtt').disabled=true;$('alist').innerHTML='Press Load Attendance'};
+$('present').onclick=()=>{
+$('alist').querySelectorAll('.as').forEach(s=>s.value='present');
+notice('Marked Present; press Save All');
+};
+$('saveAtt').onclick=async()=>{
+if(loaded!==$('ad').value||duplicates)return;
+let rows=[...$('alist').querySelectorAll('.att')];
+let entries=rows.map(x=>{
+let s=x.querySelector('.as').value,ot=Number(x.querySelector('.ao').value);
+return {id:x.dataset.id,status:s,ot:['absent','leave'].includes(s)?0:ot};
+});
+if(entries.some(x=>!Number.isFinite(x.ot)||x.ot<0)){notice('Invalid OT');return}
+if(!confirm('Save '+entries.length+' workers attendance for '+loaded+'?'))return;
+$('saveAtt').disabled=true;let ok=0,errors=[];
+for(let x of entries){
+let old=saved.get(String(x.id));
+let r=old
+?await db.from('worker_attendance').update({status:x.status,overtime_hours:x.ot}).eq('id',old.id).eq('site_id',site).select('id')
+:await db.from('worker_attendance').insert({site_id:site,worker_id:x.id,attendance_date:loaded,status:x.status,overtime_hours:x.ot}).select('id');
+if(r.error||!r.data?.length)errors.push(r.error?.message||'Permission denied');else ok++;
+}
+notice(ok+' Saved; '+errors.length+' Failed'+(errors.length?'\n'+errors.slice(0,3).join('\n'):''));
+if(!errors.length)await load();
+};
+await load();
+}
+async function monthlyReport(site){
+let month=date().slice(0,7);
+$('content').innerHTML=`<h2>Monthly Attendance Report</h2>
+<div class="grid">
+<label>Month<input id="rm" type="month" value="${month}"></label>
+<label>Worker<select id="rw"></select></label>
+</div>
+<button id="runReport">Generate Report</button>
+<div id="reportResult"></div>`;
+try{
+let list=await fullWorkers(site);
+$('rw').innerHTML=workerOptions(list,true);
+$('runReport').onclick=async()=>{
+let m=$('rm').value,id=$('rw').value;
+if(!/^\d{4}-\d{2}$/.test(m)){notice('Select valid month');return}
+let [year,mo]=m.split('-').map(Number);
+let from=m+'-01',to=new Date(Date.UTC(year,mo,0)).toISOString().slice(0,10);
+$('runReport').disabled=true;notice('Generating report...');
+try{
+let records=[],offset=0;
+while(true){
+let q=db.from('worker_attendance').select('worker_id,attendance_date,status,overtime_hours')
+.eq('site_id',site).gte('attendance_date',from).lte('attendance_date',to)
+.order('attendance_date').range(offset,offset+999);
+if(id!=='all')q=q.eq('worker_id',id);
+let r=await q;if(r.error)throw r.error;
+records.push(...r.data);
+if(r.data.length<1000)break;
+offset+=1000;
+if(offset>=20000)throw Error('Too many records');
+}
+let total={p:0,a:0,h:0,l:0,days:0,ot:0};
+let rows=list.filter(w=>id==='all'||String(w.id)===id).map(w=>{
+let a=records.filter(x=>String(x.worker_id)===String(w.id));
+let p=a.filter(x=>x.status==='present').length;
+let ab=a.filter(x=>x.status==='absent').length;
+let h=a.filter(x=>x.status==='half_day').length;
+let l=a.filter(x=>x.status==='leave').length;
+let days=p+h*.5,ot=a.reduce((n,x)=>n+Number(x.overtime_hours||0),0);
+total.p+=p;total.a+=ab;total.h+=h;total.l+=l;total.days+=days;total.ot+=ot;
+return `<tr><td>${esc(w.full_name)}</td><td>${p}</td><td>${ab}</td><td>${h}</td><td>${l}</td><td>${days}</td><td>${ot}</td></tr>`;
+}).join('');
+$('reportResult').innerHTML=`<div class="card"><b>${esc(m)} · Monthly Attendance</b></div>
+<div class="wrap"><table><thead><tr><th>Worker</th><th>P</th><th>A</th><th>H</th><th>L</th><th>Paid Days</th><th>OT</th></tr></thead>
+<tbody>${rows}<tr><th>Total</th><th>${total.p}</th><th>${total.a}</th><th>${total.h}</th><th>${total.l}</th><th>${total.days}</th><th>${Number(total.ot.toFixed(2))}</th></tr></tbody></table></div>
+<p class="muted">Only saved attendance counts. Missing days are not automatically Absent.</p>`;
+notice('Monthly report ready');
+}catch(e){notice('Report Error: '+e.message)}
+finally{$('runReport').disabled=false}
+};
+}catch(e){notice('Report Error: '+e.message)}
+}
+
+/* V5.8 FOOD DEDUCTION */
+async function foodDeduction(site){
+$('content').innerHTML=`<h2>Food Deduction</h2>
+<p class="muted">Food deduction is stored in Advances with FOOD: notes. Do not enter the same amount again in Advances.</p>
+<form id="foodForm">
+<label>Worker<select id="fw" required></select></label>
+<div class="grid">
+<label>Date<input id="fd" type="date" value="${date()}" required></label>
+<label>Amount ₹<input id="fa" type="number" min="0.01" step="0.01" required></label>
+</div>
+<label>Food Details<input id="fn" type="text" placeholder="Meals / Canteen"></label>
+<button id="foodSave">Save Food Deduction</button>
+</form>
+<h3>Recent Food Deductions</h3>
+<div id="foodList"></div>`;
+let active=workers.filter(w=>!w.is_deleted&&w.is_active!==false);
+$('fw').innerHTML=workerOptions(active);
+async function loadFood(){
+let r=await db.from('worker_advances').select('worker_id,advance_date,amount,notes')
+.eq('site_id',site).order('advance_date',{ascending:false}).limit(500);
+if(r.error){notice('Food List Error: '+r.error.message);return}
+let foods=r.data.filter(x=>String(x.notes||'').trim().toUpperCase().startsWith('FOOD:'));
+$('foodList').innerHTML=foods.length?foods.map(x=>{
+let name=workers.find(w=>String(w.id)===String(x.worker_id))?.full_name||'Worker';
+return `<div class="card"><b>${esc(name)}</b><small>${esc(x.advance_date)} · ${cash(x.amount)} · ${esc(x.notes)}</small></div>`;
+}).join(''):'<p class="muted">No food deductions found in recent entries.</p>';
+}
+$('foodForm').onsubmit=async e=>{
+e.preventDefault();
+let worker=$('fw').value,amount=Number($('fa').value);
+if(!worker||!Number.isFinite(amount)||amount<=0){notice('Enter valid worker and amount');return}
+if(!confirm('Save food deduction '+cash(amount)+'?'))return;
+$('foodSave').disabled=true;
+try{
+let details=$('fn').value.trim();
+let r=await db.from('worker_advances').insert({
+site_id:site,
+worker_id:worker,
+advance_date:$('fd').value,
+amount:amount,
+notes:'FOOD: '+(details||'Meals')
+}).select('worker_id');
+if(r.error)throw r.error;
+if(!r.data?.length)throw Error('Permission denied');
+$('fa').value='';$('fn').value='';
+await loadFood();
+notice('Food deduction saved');
+}catch(e){notice('Food Error: '+e.message)}
+finally{$('foodSave').disabled=false}
+};
+await loadFood();
+}
+
+/* V5.8 SALARY SLIP */
+async function salarySlip(site){
+let d=date();
+$('content').innerHTML=`<h2>Worker Salary Slip</h2>
+<label>Worker<select id="slw"></select></label>
+<div class="grid">
+<label>From<input id="slf" type="date" value="${d.slice(0,7)}-01"></label>
+<label>To<input id="slt" type="date" value="${d}"></label>
+</div>
+<div class="actions">
+<button id="makeSlip">Generate Salary Slip</button>
+<button id="printSlip" class="alt hide">Print / Save PDF</button>
+</div>
+<div id="slipResult"></div>
+<p class="muted">Salary is calculated using current daily wage and OT rate. Advances, Food and payments are counted by transaction date within the selected period.</p>`;
+try{
+let list=await fullWorkers(site);
+$('slw').innerHTML=workerOptions(list);
+$('makeSlip').onclick=async()=>{
+let id=$('slw').value,from=$('slf').value,to=$('slt').value;
+if(!id||!from||!to||from>to){notice('Select worker and valid dates');return}
+$('makeSlip').disabled=true;
+$('printSlip').classList.add('hide');
+$('slipResult').innerHTML='';
+notice('Preparing salary slip...');
+try{
+let w=list.find(x=>String(x.id)===id);
+if(!w)throw Error('Worker not found');
+let data=await salaryData(site,from,to,id);
+let x=calculateWorker(w,data);
+let siteName=sites.find(s=>String(s.id)===String(site))?.site_name||'Site';
+$('slipResult').innerHTML=`<div class="slip" id="slipPaper">
+<h2>ARIF AGRO WORKS</h2>
+<h3>WORKER SALARY SLIP</h3>
+<p><b>Site:</b> ${esc(siteName)}</p>
+<p><b>Worker:</b> ${esc(w.full_name)}</p>
+<p><b>Period:</b> ${esc(from)} to ${esc(to)}</p>
+<div class="wrap"><table>
+<tr><th>Description</th><th>Amount / Value</th></tr>
+<tr><td>Daily Wage</td><td>${cash(w.daily_wage)}</td></tr>
+<tr><td>Paid Attendance Days</td><td>${x.days}</td></tr>
+<tr><td>Wages</td><td>${cash(x.wage)}</td></tr>
+<tr><td>Overtime Hours</td><td>${x.ot}</td></tr>
+<tr><td>Overtime Rate</td><td>${cash(w.overtime_rate)}</td></tr>
+<tr><td>Overtime Amount</td><td>${cash(x.otPay)}</td></tr>
+<tr><th>Gross Salary</th><th>${cash(x.gross)}</th></tr>
+<tr><td>Advance Deduction</td><td>− ${cash(x.advance)}</td></tr>
+<tr><td>Manual Food</td><td>− ${cash(x.manualFood)}</td></tr><tr><td>Finalized Food</td><td>− ${cash(x.finalFood)}</td></tr><tr><th>Total Food</th><th>− ${cash(x.food)}</th></tr>
+<tr><td>Salary Already Paid</td><td>− ${cash(x.paid)}</td></tr>
+<tr><th>Balance Payable</th><th>${cash(x.due)}</th></tr>
+</table></div>
+<p class="muted">Generated: ${esc(date())}</p>
+<p class="muted">Computer-generated salary calculation. Verify before payment.</p>
+</div>`;
+$('printSlip').classList.remove('hide');
+notice('Salary slip ready');
+}catch(e){notice('Slip Error: '+e.message)}
+finally{$('makeSlip').disabled=false}
+};
+$('printSlip').onclick=()=>{
+let slip=$('slipPaper');
+if(!slip)return;
+let win=window.open('','_blank');
+if(!win){notice('Allow pop-ups in Chrome to print');return}
+win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salary Slip</title>
+<style>body{font-family:Arial;color:#111;padding:20px}.slip{max-width:750px;margin:auto}h2,h3{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #888;padding:9px;text-align:left}th{background:#eee}.muted{color:#555;font-size:12px}</style>
+</head><body>${slip.outerHTML}</body></html>`);
+win.document.close();
+win.focus();
+setTimeout(()=>win.print(),500);
+};
+}catch(e){notice('Slip Error: '+e.message)}
+}
+
+const EMBEDDED_FOOD_HTML='CjwhRE9DVFlQRSBodG1sPgo8aHRtbCBsYW5nPSJoaSI+CjxoZWFkPgo8bWV0YSBjaGFyc2V0PSJVVEYtOCI+CjxtZXRhIG5hbWU9InZpZXdwb3J0IiBjb250ZW50PSJ3aWR0aD1kZXZpY2Utd2lkdGgsaW5pdGlhbC1zY2FsZT0xIj4KPHRpdGxlPkFyaWYgQWdybyBXb3JrcyBWNS45IEZvb2QgU2V0dGxlbWVudDwvdGl0bGU+CjxzdHlsZT4KKntib3gtc2l6aW5nOmJvcmRlci1ib3h9CmJvZHl7bWFyZ2luOjA7YmFja2dyb3VuZDojMDcxYjI4O2NvbG9yOiNlZGY2ZmI7Zm9udDoxNXB4IEFyaWFsLHNhbnMtc2VyaWZ9CmhlYWRlcntiYWNrZ3JvdW5kOiMxMjM2NGE7Ym9yZGVyLWJvdHRvbTozcHggc29saWQgI2ZmNzgyZjtwYWRkaW5nOjE3cHh9Cmgye21hcmdpbjowIDAgNXB4fQptYWlue21heC13aWR0aDo5NTBweDttYXJnaW46YXV0bztwYWRkaW5nOjEzcHh9Ci5ib3h7YmFja2dyb3VuZDojMTAyZDNmO2JvcmRlcjoxcHggc29saWQgIzMxNTA2NDtib3JkZXItcmFkaXVzOjEycHg7cGFkZGluZzoxNXB4O21hcmdpbjoxMnB4IDB9Ci5ncmlke2Rpc3BsYXk6Z3JpZDtncmlkLXRlbXBsYXRlLWNvbHVtbnM6cmVwZWF0KGF1dG8tZml0LG1pbm1heCgxNjBweCwxZnIpKTtnYXA6MTBweH0KbGFiZWx7ZGlzcGxheTpibG9jazttYXJnaW46OXB4IDAgNHB4O2NvbG9yOiNjNmRjZTZ9CmlucHV0LHNlbGVjdCxidXR0b257d2lkdGg6MTAwJTtwYWRkaW5nOjExcHg7Ym9yZGVyLXJhZGl1czo4cHg7Ym9yZGVyOjFweCBzb2xpZCAjNTg3MTgzO2ZvbnQ6aW5oZXJpdH0KaW5wdXQsc2VsZWN0e2JhY2tncm91bmQ6IzA3MWIyODtjb2xvcjp3aGl0ZX0KYnV0dG9ue2JhY2tncm91bmQ6I2ZmNzgyZjtjb2xvcjojMTAxYjIzO2ZvbnQtd2VpZ2h0OmJvbGQ7Ym9yZGVyOjA7bWFyZ2luLXRvcDoxMHB4fQpidXR0b24uc2Vjb25kYXJ5e2JhY2tncm91bmQ6IzI5NGU2NTtjb2xvcjp3aGl0ZX0KYnV0dG9uLmRhbmdlcntiYWNrZ3JvdW5kOiM3NDNjNDM7Y29sb3I6d2hpdGV9CmJ1dHRvbi5maW5hbHtiYWNrZ3JvdW5kOiMzZmJmODM7Y29sb3I6IzA2MWIxMn0KYnV0dG9uOmRpc2FibGVke29wYWNpdHk6LjV9CnNtYWxsLC5tdXRlZHtjb2xvcjojYjJjYWQ1fQouaXRlbXtwYWRkaW5nOjExcHggMDtib3JkZXItYm90dG9tOjFweCBzb2xpZCAjMzU1MTYzfQouYWN0aW9uc3tkaXNwbGF5OmZsZXg7Z2FwOjhweH0KLmFjdGlvbnMgYnV0dG9ue3dpZHRoOmF1dG87cGFkZGluZzo3cHggMTFweH0KI21zZ3t3aGl0ZS1zcGFjZTpwcmUtd3JhcDtjb2xvcjojZmZkM2E2O3BhZGRpbmc6OXB4fQp0YWJsZXt3aWR0aDoxMDAlO2JvcmRlci1jb2xsYXBzZTpjb2xsYXBzZTtmb250LXNpemU6MTNweH0KdGQsdGh7cGFkZGluZzo5cHggNXB4O2JvcmRlci1ib3R0b206MXB4IHNvbGlkICMzMTUwNjQ7dGV4dC1hbGlnbjpsZWZ0fQouc2Nyb2xse292ZXJmbG93OmF1dG99Ci53YXJuaW5ne2NvbG9yOiNmZmQxYTN9Ci5nb29ke2NvbG9yOiNhOGYwYzN9CltoaWRkZW5de2Rpc3BsYXk6bm9uZSFpbXBvcnRhbnR9Cjwvc3R5bGU+CjwvaGVhZD4KPGJvZHk+CjxoZWFkZXI+CjxoMj5BcmlmIEFncm8gV29ya3MgwrcgVjUuOTwvaDI+CjxzbWFsbD5Gb29kIE1hbmFnZW1lbnQgJiBGaW5hbCBTZXR0bGVtZW50PC9zbWFsbD4KPC9oZWFkZXI+CjxtYWluPgo8ZGl2IGlkPSJtc2ciPkxvYWRpbmcuLi48L2Rpdj4KCjxzZWN0aW9uIGlkPSJsb2dpbiIgY2xhc3M9ImJveCIgaGlkZGVuPgo8aDM+U3RhZmYgTG9naW48L2gzPgo8bGFiZWw+RW1haWw8L2xhYmVsPgo8aW5wdXQgaWQ9ImVtYWlsIiB0eXBlPSJlbWFpbCI+CjxsYWJlbD5QYXNzd29yZDwvbGFiZWw+CjxpbnB1dCBpZD0icGFzc3dvcmQiIHR5cGU9InBhc3N3b3JkIj4KPGJ1dHRvbiBpZD0ic2lnbkluIj5Mb2dpbjwvYnV0dG9uPgo8L3NlY3Rpb24+Cgo8ZGl2IGlkPSJhcHAiIGhpZGRlbj4KPHNlY3Rpb24gY2xhc3M9ImJveCI+CjxoMz5TaXRlICYgUmVwb3J0PC9oMz4KPGRpdiBjbGFzcz0iZ3JpZCI+CjxkaXY+CjxsYWJlbD5TaXRlPC9sYWJlbD4KPHNlbGVjdCBpZD0ic2l0ZSI+PC9zZWxlY3Q+CjwvZGl2Pgo8ZGl2Pgo8bGFiZWw+RnJvbTwvbGFiZWw+CjxpbnB1dCBpZD0iZnJvbSIgdHlwZT0iZGF0ZSI+CjwvZGl2Pgo8ZGl2Pgo8bGFiZWw+VG88L2xhYmVsPgo8aW5wdXQgaWQ9InRvIiB0eXBlPSJkYXRlIj4KPC9kaXY+CjwvZGl2Pgo8YnV0dG9uIGlkPSJyZWZyZXNoIiBjbGFzcz0ic2Vjb25kYXJ5Ij5SZWZyZXNoIC8gQ2FsY3VsYXRlPC9idXR0b24+CjxidXR0b24gaWQ9InNpZ25PdXQiIGNsYXNzPSJzZWNvbmRhcnkiPkxvZ291dDwvYnV0dG9uPgo8L3NlY3Rpb24+Cgo8c2VjdGlvbiBjbGFzcz0iYm94Ij4KPGgzPjEuIEdyb2NlcnkgUHVyY2hhc2U8L2gzPgo8ZGl2IGNsYXNzPSJncmlkIj4KPGRpdj4KPGxhYmVsPkRhdGU8L2xhYmVsPgo8aW5wdXQgaWQ9ImdkYXRlIiB0eXBlPSJkYXRlIj4KPC9kaXY+CjxkaXY+CjxsYWJlbD5BbW91bnQg4oK5PC9sYWJlbD4KPGlucHV0IGlkPSJnYW1vdW50IiB0eXBlPSJudW1iZXIiIG1pbj0iLjAxIiBzdGVwPSIuMDEiPgo8L2Rpdj4KPGRpdj4KPGxhYmVsPkRldGFpbHM8L2xhYmVsPgo8aW5wdXQgaWQ9ImdkZXNjIiBwbGFjZWhvbGRlcj0iUmljZSwgdmVnZXRhYmxlcywgZmxvdXIuLi4iPgo8L2Rpdj4KPC9kaXY+CjxidXR0b24gaWQ9ImFkZEciPlNhdmUgR3JvY2VyeTwvYnV0dG9uPgo8ZGl2IGlkPSJncm9jZXJpZXMiPjwvZGl2Pgo8L3NlY3Rpb24+Cgo8c2VjdGlvbiBjbGFzcz0iYm94Ij4KPGgzPjIuIFdvcmtlciBGb29kIFBlcmlvZDwvaDM+CjxkaXYgY2xhc3M9ImdyaWQiPgo8ZGl2Pgo8bGFiZWw+V29ya2VyPC9sYWJlbD4KPHNlbGVjdCBpZD0id29ya2VyIj48L3NlbGVjdD4KPC9kaXY+CjxkaXY+CjxsYWJlbD5FYXRpbmcgRnJvbTwvbGFiZWw+CjxpbnB1dCBpZD0icGZyb20iIHR5cGU9ImRhdGUiPgo8L2Rpdj4KPGRpdj4KPGxhYmVsPkVhdGluZyBUaHJvdWdoPC9sYWJlbD4KPGlucHV0IGlkPSJwdG8iIHR5cGU9ImRhdGUiPgo8L2Rpdj4KPGRpdj4KPGxhYmVsPlBheW1lbnQgVHlwZTwvbGFiZWw+CjxzZWxlY3QgaWQ9InB0eXBlIj4KPG9wdGlvbiB2YWx1ZT0ic2FsYXJ5X2RlZHVjdGlvbiI+U2FsYXJ5IERlZHVjdGlvbjwvb3B0aW9uPgo8b3B0aW9uIHZhbHVlPSJjb21wYW55X3BhaWQiPkNvbXBhbnkgUGFpZDwvb3B0aW9uPgo8L3NlbGVjdD4KPC9kaXY+CjwvZGl2Pgo8YnV0dG9uIGlkPSJhZGRQIj5TYXZlIEZvb2QgUGVyaW9kPC9idXR0b24+CjxkaXYgaWQ9InBlcmlvZHMiPjwvZGl2Pgo8L3NlY3Rpb24+Cgo8c2VjdGlvbiBjbGFzcz0iYm94Ij4KPGgzPjMuIEZvb2QgQ29zdCBTaGFyaW5nPC9oMz4KPGRpdiBpZD0icmVzdWx0Ij48L2Rpdj4KPC9zZWN0aW9uPgoKPHNlY3Rpb24gY2xhc3M9ImJveCI+CjxoMz40LiBGaW5hbCBGb29kIFNldHRsZW1lbnQ8L2gzPgo8cCBjbGFzcz0ibXV0ZWQiPk9ubHkgTWFzdGVyIEFkbWluIGNhbiBmaW5hbGl6ZS4gRmluYWxpemVkIGFtb3VudHMgYXJlIHN0b3JlZCBzZXBhcmF0ZWx5IGFuZCBjYW5ub3QgYmUgZmluYWxpemVkIGFnYWluIGZvciBhbiBvdmVybGFwcGluZyBwZXJpb2QuPC9wPgo8ZGl2IGlkPSJtYXN0ZXJBcmVhIiBoaWRkZW4+CjxidXR0b24gaWQ9ImZpbmFsaXplIiBjbGFzcz0iZmluYWwiPkZpbmFsaXplIFNlbGVjdGVkIEZvb2QgUGVyaW9kPC9idXR0b24+CjwvZGl2Pgo8cCBpZD0icm9sZUluZm8iIGNsYXNzPSJtdXRlZCI+PC9wPgo8ZGl2IGlkPSJzZXR0bGVtZW50cyI+PC9kaXY+CjxwIGNsYXNzPSJ3YXJuaW5nIj5GaW5hbCBTZXR0bGVtZW50IHJlY29yZHMgdGhlIEZvb2QgU2hhcmUgb25seS4gU2FsYXJ5IERlZHVjdGlvbiBpcyBub3QgcG9zdGVkIHlldC48L3A+Cjwvc2VjdGlvbj4KPC9kaXY+CjwvbWFpbj4KCjxzY3JpcHQgc3JjPSJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvbnBtL0BzdXBhYmFzZS9zdXBhYmFzZS1qc0AyL2Rpc3QvdW1kL3N1cGFiYXNlLm1pbi5qcyI+PC9zY3JpcHQ+CjxzY3JpcHQ+CmNvbnN0IFNVUEFCQVNFX1VSTD0naHR0cHM6Ly9xZnlkZWtwaGJkcHZ2Y3poaW1qcy5zdXBhYmFzZS5jbyc7CmNvbnN0IFNVUEFCQVNFX0tFWT0nc2JfcHVibGlzaGFibGVfczd6Yzk5Zzg2X1laSmVOMHZiQ3p3QV9nQ3JrZGF2bic7Cgpjb25zdCAkPWlkPT5kb2N1bWVudC5nZXRFbGVtZW50QnlJZChpZCk7CmNvbnN0IG1zZz10PT4kKCdtc2cnKS50ZXh0Q29udGVudD10Owpjb25zdCBlc2M9dj0+U3RyaW5nKHY/PycnKS5yZXBsYWNlKC9bJjw+IiddL2csYz0+KHsKJyYnOicmYW1wOycsJzwnOicmbHQ7JywnPic6JyZndDsnLCciJzonJnF1b3Q7JywiJyI6JyYjMzk7Jwp9W2NdKSk7CmNvbnN0IG1vbmV5PW49PifigrknK051bWJlcihufHwwKS50b0xvY2FsZVN0cmluZygnZW4tSU4nLHsKbWluaW11bUZyYWN0aW9uRGlnaXRzOjIsbWF4aW11bUZyYWN0aW9uRGlnaXRzOjIKfSk7CmNvbnN0IGlzbz1kPT5bCmQuZ2V0RnVsbFllYXIoKSwKU3RyaW5nKGQuZ2V0TW9udGgoKSsxKS5wYWRTdGFydCgyLCcwJyksClN0cmluZyhkLmdldERhdGUoKSkucGFkU3RhcnQoMiwnMCcpCl0uam9pbignLScpOwpjb25zdCBkYXlOdW1iZXI9cz0+RGF0ZS5wYXJzZShzKydUMDA6MDA6MDBaJykvODY0MDAwMDA7CmNvbnN0IGRheXM9KGEsYik9Pk1hdGgucm91bmQoZGF5TnVtYmVyKGIpLWRheU51bWJlcihhKSkrMTsKCmxldCBkYixyb2xlPScnLGJ1c3k9ZmFsc2U7CmxldCBzaXRlcz1bXSx3b3JrZXJzPVtdLGdyb2Nlcmllcz1bXSxwZXJpb2RzPVtdLHNldHRsZW1lbnRzPVtdOwpsZXQgdHJ1bmNhdGVkPWZhbHNlOwoKZnVuY3Rpb24gZmFpbChlKXsKbXNnKCdFcnJvcjogJysoZT8ubWVzc2FnZXx8ZSkpOwpjb25zb2xlLmVycm9yKGUpOwp9CmFzeW5jIGZ1bmN0aW9uIHF1ZXJ5KHEpewpjb25zdCByPWF3YWl0IHE7CmlmKHIuZXJyb3IpdGhyb3cgci5lcnJvcjsKcmV0dXJuIHIuZGF0YXx8W107Cn0KYXN5bmMgZnVuY3Rpb24gYWN0aW9uKGZuKXsKaWYoYnVzeSlyZXR1cm47CmJ1c3k9dHJ1ZTsKdHJ5e2F3YWl0IGZuKCl9Y2F0Y2goZSl7ZmFpbChlKX0KZmluYWxseXtidXN5PWZhbHNlfQp9CmZ1bmN0aW9uIHNpZCgpe3JldHVybiAkKCdzaXRlJykudmFsdWV9CmZ1bmN0aW9uIHdvcmtlck5hbWUoaWQpewpyZXR1cm4gd29ya2Vycy5maW5kKHc9PlN0cmluZyh3LmlkKT09PVN0cmluZyhpZCkpPy5mdWxsX25hbWV8fCdVbmtub3duIFdvcmtlcic7Cn0KZnVuY3Rpb24gZGF0ZXMoKXsKcmV0dXJuIHthOiQoJ2Zyb20nKS52YWx1ZSxiOiQoJ3RvJykudmFsdWV9Owp9CmZ1bmN0aW9uIHZhbGlkRGF0ZXMoYSxiKXsKcmV0dXJuICEhYSYmISFiJiZiPj1hOwp9CmZ1bmN0aW9uIGlzTG9ja2VkKGEsYil7CnJldHVybiBzZXR0bGVtZW50cy5zb21lKHM9PgpzLnN0YXR1cz09PSdmaW5hbCcmJnMucGVyaW9kX3N0YXJ0PD1iJiZzLnBlcmlvZF9lbmQ+PWEKKTsKfQpmdW5jdGlvbiBzZXREZWZhdWx0cygpewpjb25zdCBkPW5ldyBEYXRlKCksdG9kYXk9aXNvKGQpOwokKCdnZGF0ZScpLnZhbHVlPXRvZGF5OwokKCdwZnJvbScpLnZhbHVlPXRvZGF5OwokKCdwdG8nKS52YWx1ZT10b2RheTsKJCgnZnJvbScpLnZhbHVlPWlzbyhuZXcgRGF0ZShkLmdldEZ1bGxZZWFyKCksZC5nZXRNb250aCgpLDEpKTsKJCgndG8nKS52YWx1ZT1pc28obmV3IERhdGUoZC5nZXRGdWxsWWVhcigpLGQuZ2V0TW9udGgoKSsxLDApKTsKfQpmdW5jdGlvbiB3b3JrZXJPcHRpb25zKCl7CiQoJ3dvcmtlcicpLmlubmVySFRNTD13b3JrZXJzLm1hcCh3PT4KYDxvcHRpb24gdmFsdWU9IiR7ZXNjKHcuaWQpfSI+JHtlc2Mody5mdWxsX25hbWUpfTwvb3B0aW9uPmAKKS5qb2luKCcnKTsKfQphc3luYyBmdW5jdGlvbiBpbml0KCl7CmlmKCF3aW5kb3cuc3VwYWJhc2U/LmNyZWF0ZUNsaWVudCl0aHJvdyBFcnJvcignU3VwYWJhc2UgbGlicmFyeSB1bmF2YWlsYWJsZScpOwpkYj13aW5kb3cuc3VwYWJhc2UuY3JlYXRlQ2xpZW50KFNVUEFCQVNFX1VSTCxTVVBBQkFTRV9LRVkpOwpjb25zdCB7ZGF0YTp7c2Vzc2lvbn0sZXJyb3J9PWF3YWl0IGRiLmF1dGguZ2V0U2Vzc2lvbigpOwppZihlcnJvcil0aHJvdyBlcnJvcjsKaWYoIXNlc3Npb24pewokKCdsb2dpbicpLmhpZGRlbj1mYWxzZTsKbXNnKCdQbGVhc2UgbG9nIGluJyk7CnJldHVybjsKfQphd2FpdCBlbnRlcigpOwp9CmFzeW5jIGZ1bmN0aW9uIGVudGVyKCl7CmNvbnN0IHtkYXRhOnt1c2VyfSxlcnJvcn09YXdhaXQgZGIuYXV0aC5nZXRVc2VyKCk7CmlmKGVycm9yKXRocm93IGVycm9yOwppZighdXNlcil7CiQoJ2xvZ2luJykuaGlkZGVuPWZhbHNlOwptc2coJ1BsZWFzZSBsb2cgaW4nKTsKcmV0dXJuOwp9Cgpjb25zdCBwcm9maWxlcz1hd2FpdCBxdWVyeSgKZGIuZnJvbSgnc3RhZmZfcHJvZmlsZXMnKS5zZWxlY3QoJ3JvbGUnKS5lcSgndXNlcl9pZCcsdXNlci5pZCkubGltaXQoMSkKKTsKcm9sZT1wcm9maWxlc1swXT8ucm9sZXx8J3Vua25vd24nOwoKc2l0ZXM9YXdhaXQgcXVlcnkoCmRiLmZyb20oJ3NpdGVzJykuc2VsZWN0KCdpZCxzaXRlX25hbWUnKS5vcmRlcignc2l0ZV9uYW1lJykKKTsKaWYoIXNpdGVzLmxlbmd0aCl0aHJvdyBFcnJvcignTm8gYWNjZXNzaWJsZSBzaXRlcycpOwoKJCgnc2l0ZScpLmlubmVySFRNTD1zaXRlcy5tYXAocz0+CmA8b3B0aW9uIHZhbHVlPSIke2VzYyhzLmlkKX0iPiR7ZXNjKHMuc2l0ZV9uYW1lKX08L29wdGlvbj5gCikuam9pbignJyk7CgokKCdsb2dpbicpLmhpZGRlbj10cnVlOwokKCdhcHAnKS5oaWRkZW49ZmFsc2U7CiQoJ21hc3RlckFyZWEnKS5oaWRkZW49cm9sZSE9PSdtYXN0ZXInOwokKCdyb2xlSW5mbycpLnRleHRDb250ZW50PSdMb2dnZWQgaW4gYXM6ICcrcm9sZTsKc2V0RGVmYXVsdHMoKTsKYXdhaXQgbG9hZCgpOwp9CmFzeW5jIGZ1bmN0aW9uIGxvYWQoKXsKY29uc3Qgc2l0ZT1zaWQoKTsKaWYoIXNpdGUpcmV0dXJuOwptc2coJ0xvYWRpbmcuLi4nKTsKdHJ5ewpjb25zdCBbdyxnLHAsc109YXdhaXQgUHJvbWlzZS5hbGwoWwpxdWVyeShkYi5mcm9tKCd3b3JrZXJzJykKLnNlbGVjdCgnaWQsZnVsbF9uYW1lLGlzX2RlbGV0ZWQnKQouZXEoJ3NpdGVfaWQnLHNpdGUpLm9yZGVyKCdmdWxsX25hbWUnKS5saW1pdCgxMDAwKSksCnF1ZXJ5KGRiLmZyb20oJ2Zvb2RfZ3JvY2VyeScpCi5zZWxlY3QoJyonKS5lcSgnc2l0ZV9pZCcsc2l0ZSkKLm9yZGVyKCdwdXJjaGFzZV9kYXRlJyx7YXNjZW5kaW5nOmZhbHNlfSkubGltaXQoMTAwMCkpLApxdWVyeShkYi5mcm9tKCd3b3JrZXJfZm9vZF9wZXJpb2RzJykKLnNlbGVjdCgnKicpLmVxKCdzaXRlX2lkJyxzaXRlKQoub3JkZXIoJ3N0YXJ0X2RhdGUnLHthc2NlbmRpbmc6ZmFsc2V9KS5saW1pdCgxMDAwKSksCnF1ZXJ5KGRiLmZyb20oJ2Zvb2Rfc2V0dGxlbWVudHMnKQouc2VsZWN0KCcqJykuZXEoJ3NpdGVfaWQnLHNpdGUpCi5vcmRlcigncGVyaW9kX3N0YXJ0Jyx7YXNjZW5kaW5nOmZhbHNlfSkubGltaXQoMTAwMCkpCl0pOwp3b3JrZXJzPXc7Cmdyb2Nlcmllcz1nOwpwZXJpb2RzPXA7CnNldHRsZW1lbnRzPXM7CnRydW5jYXRlZD1bdyxnLHAsc10uc29tZSh4PT54Lmxlbmd0aD09PTEwMDApOwp3b3JrZXJPcHRpb25zKCk7CnJlbmRlcigpOwptc2coJ0xvYWRlZCBzdWNjZXNzZnVsbHknKTsKfWNhdGNoKGUpe2ZhaWwoZSl9Cn0KZnVuY3Rpb24gcmVuZGVyKCl7CiQoJ2dyb2NlcmllcycpLmlubmVySFRNTD0nPGg0PlNhdmVkIEdyb2Nlcnk8L2g0PicrCihncm9jZXJpZXMubGVuZ3RoP2dyb2Nlcmllcy5tYXAoZz0+YAo8ZGl2IGNsYXNzPSJpdGVtIj4KPGI+JHtlc2MoZy5wdXJjaGFzZV9kYXRlKX0gwrcgJHttb25leShnLmFtb3VudCl9PC9iPgo8ZGl2PiR7ZXNjKGcuZGVzY3JpcHRpb24pfTwvZGl2Pgoke3JvbGU9PT0nbWFzdGVyJz9gPGRpdiBjbGFzcz0iYWN0aW9ucyI+PGJ1dHRvbiBjbGFzcz0iZGFuZ2VyIiBkYXRhLWc9IiR7ZXNjKGcuaWQpfSI+RGVsZXRlPC9idXR0b24+PC9kaXY+YDonJ30KPC9kaXY+YCkuam9pbignJyk6JzxzbWFsbD5ObyBncm9jZXJ5IGVudHJpZXM8L3NtYWxsPicpOwoKJCgncGVyaW9kcycpLmlubmVySFRNTD0nPGg0PlNhdmVkIEZvb2QgUGVyaW9kczwvaDQ+JysKKHBlcmlvZHMubGVuZ3RoP3BlcmlvZHMubWFwKHA9PmAKPGRpdiBjbGFzcz0iaXRlbSI+CjxiPiR7ZXNjKHdvcmtlck5hbWUocC53b3JrZXJfaWQpKX08L2I+CjxkaXY+JHtlc2MocC5zdGFydF9kYXRlKX0g4oaSICR7ZXNjKHAuZW5kX2RhdGUpfTwvZGl2Pgo8c21hbGw+JHtwLnBheW1lbnRfdHlwZT09PSdjb21wYW55X3BhaWQnPydDb21wYW55IFBhaWQnOidTYWxhcnkgRGVkdWN0aW9uJ308L3NtYWxsPgoke3JvbGU9PT0nbWFzdGVyJz9gPGRpdiBjbGFzcz0iYWN0aW9ucyI+PGJ1dHRvbiBjbGFzcz0iZGFuZ2VyIiBkYXRhLXA9IiR7ZXNjKHAuaWQpfSI+RGVsZXRlPC9idXR0b24+PC9kaXY+YDonJ30KPC9kaXY+YCkuam9pbignJyk6JzxzbWFsbD5ObyBmb29kIHBlcmlvZHM8L3NtYWxsPicpOwoKJCgnc2V0dGxlbWVudHMnKS5pbm5lckhUTUw9JzxoND5TZXR0bGVtZW50IEhpc3Rvcnk8L2g0PicrCihzZXR0bGVtZW50cy5sZW5ndGg/c2V0dGxlbWVudHMubWFwKHM9PmAKPGRpdiBjbGFzcz0iaXRlbSI+CjxiPiR7ZXNjKHMucGVyaW9kX3N0YXJ0KX0g4oaSICR7ZXNjKHMucGVyaW9kX2VuZCl9PC9iPgo8ZGl2PiR7bW9uZXkocy5ncm9jZXJ5X3RvdGFsKX0gwrcgJHtzLnRvdGFsX2Zvb2RfZGF5c30gRm9vZC1EYXlzPC9kaXY+CjxzbWFsbD5TdGF0dXM6ICR7ZXNjKHMuc3RhdHVzKX08L3NtYWxsPgo8L2Rpdj5gKS5qb2luKCcnKTonPHNtYWxsPk5vIHNldHRsZW1lbnRzIHlldDwvc21hbGw+Jyk7CgpjYWxjdWxhdGUoKTsKfQpmdW5jdGlvbiByZXBvcnREYXRhKCl7CmNvbnN0IHthLGJ9PWRhdGVzKCk7CmlmKCF2YWxpZERhdGVzKGEsYikpdGhyb3cgRXJyb3IoJ0Nob29zZSB2YWxpZCByZXBvcnQgZGF0ZXMnKTsKCmNvbnN0IHB1cmNoYXNlZD1ncm9jZXJpZXMuZmlsdGVyKGc9PmcucHVyY2hhc2VfZGF0ZT49YSYmZy5wdXJjaGFzZV9kYXRlPD1iKTsKY29uc3QgdG90YWw9cHVyY2hhc2VkLnJlZHVjZSgobixnKT0+bitOdW1iZXIoZy5hbW91bnR8fDApLDApOwpjb25zdCBtYXA9bmV3IE1hcCgpOwoKZm9yKGNvbnN0IHAgb2YgcGVyaW9kcyl7CmNvbnN0IGxvPXAuc3RhcnRfZGF0ZT5hP3Auc3RhcnRfZGF0ZTphOwpjb25zdCBoaT1wLmVuZF9kYXRlPGI/cC5lbmRfZGF0ZTpiOwppZihsbz5oaSljb250aW51ZTsKCmNvbnN0IG49ZGF5cyhsbyxoaSk7CmNvbnN0IGtleT1TdHJpbmcocC53b3JrZXJfaWQpKyd8JytwLnBheW1lbnRfdHlwZTsKY29uc3QgeD1tYXAuZ2V0KGtleSl8fHsKd29ya2VyX2lkOnAud29ya2VyX2lkLAp0eXBlOnAucGF5bWVudF90eXBlLApkYXlzOjAKfTsKeC5kYXlzKz1uOwptYXAuc2V0KGtleSx4KTsKfQpjb25zdCBlbnRyaWVzPVsuLi5tYXAudmFsdWVzKCldOwpjb25zdCB0b3RhbERheXM9ZW50cmllcy5yZWR1Y2UoKG4seCk9Pm4reC5kYXlzLDApOwpjb25zdCBvdmVybGFwcz1wZXJpb2RzLnNvbWUoKHAsaSk9PnBlcmlvZHMuc29tZSgocSxqKT0+Cmo+aSYmU3RyaW5nKHAud29ya2VyX2lkKT09PVN0cmluZyhxLndvcmtlcl9pZCkmJgpwLnN0YXJ0X2RhdGU8PXEuZW5kX2RhdGUmJnEuc3RhcnRfZGF0ZTw9cC5lbmRfZGF0ZSYmCnAuc3RhcnRfZGF0ZTw9YiYmcC5lbmRfZGF0ZT49YSYmCnEuc3RhcnRfZGF0ZTw9YiYmcS5lbmRfZGF0ZT49YQopKTsKY29uc3QgbWl4ZWQ9bmV3IFNldChlbnRyaWVzLm1hcCh4PT5TdHJpbmcoeC53b3JrZXJfaWQpKSkuc2l6ZSE9PWVudHJpZXMubGVuZ3RoOwoKcmV0dXJuIHthLGIsdG90YWwsdG90YWxEYXlzLGVudHJpZXMsb3ZlcmxhcHMsbWl4ZWR9Owp9CmZ1bmN0aW9uIGNhbGN1bGF0ZSgpewp0cnl7CmNvbnN0IHI9cmVwb3J0RGF0YSgpOwpsZXQgaHRtbD1gCjxwPjxiPkdyb2NlcnkgVG90YWw6PC9iPiAke21vbmV5KHIudG90YWwpfTwvcD4KPHA+PGI+VG90YWwgRm9vZC1EYXlzOjwvYj4gJHtyLnRvdGFsRGF5c308L3A+CjxwPjxiPkNvc3QgUGVyIEZvb2QtRGF5OjwvYj4gJHtyLnRvdGFsRGF5cz9tb25leShyLnRvdGFsL3IudG90YWxEYXlzKTon4oCUJ308L3A+YDsKCmlmKGlzTG9ja2VkKHIuYSxyLmIpKXsKaHRtbCs9JzxwIGNsYXNzPSJnb29kIj5UaGlzIHBlcmlvZCBvdmVybGFwcyBhIGZpbmFsaXplZCBzZXR0bGVtZW50LiBJdCBjYW5ub3QgYmUgZmluYWxpemVkIGFnYWluLjwvcD4nOwp9CmlmKHIub3ZlcmxhcHMpaHRtbCs9JzxwIGNsYXNzPSJ3YXJuaW5nIj5PdmVybGFwcGluZyBmb29kIHBlcmlvZHMgZGV0ZWN0ZWQuPC9wPic7CmlmKHIubWl4ZWQpaHRtbCs9JzxwIGNsYXNzPSJ3YXJuaW5nIj5Tb21lIHdvcmtlcnMgaGF2ZSBtaXhlZCBwYXltZW50IHR5cGVzLiBTcGxpdCB0aGUgc2V0dGxlbWVudC48L3A+JzsKaWYodHJ1bmNhdGVkKWh0bWwrPSc8cCBjbGFzcz0id2FybmluZyI+UmVjb3JkIGxpbWl0IHJlYWNoZWQuIENhbGN1bGF0aW9uIG1heSBiZSBpbmNvbXBsZXRlLjwvcD4nOwoKbGV0IHNhbGFyeT0wLGNvbXBhbnk9MDsKaHRtbCs9JzxkaXYgY2xhc3M9InNjcm9sbCI+PHRhYmxlPjx0cj48dGg+V29ya2VyPC90aD48dGg+RGF5czwvdGg+PHRoPlNoYXJlPC90aD48dGg+UGFpZCBCeTwvdGg+PC90cj4nOwpmb3IoY29uc3QgeCBvZiByLmVudHJpZXMpewpjb25zdCBzaGFyZT1yLnRvdGFsRGF5cz9yLnRvdGFsKnguZGF5cy9yLnRvdGFsRGF5czowOwppZih4LnR5cGU9PT0nY29tcGFueV9wYWlkJyljb21wYW55Kz1zaGFyZTsKZWxzZSBzYWxhcnkrPXNoYXJlOwpodG1sKz1gPHRyPgo8dGQ+JHtlc2Mod29ya2VyTmFtZSh4Lndvcmtlcl9pZCkpfTwvdGQ+Cjx0ZD4ke3guZGF5c308L3RkPgo8dGQ+JHttb25leShzaGFyZSl9PC90ZD4KPHRkPiR7eC50eXBlPT09J2NvbXBhbnlfcGFpZCc/J0NvbXBhbnknOidTYWxhcnknfQo8L3RkPjwvdHI+YDsKfQpodG1sKz0nPC90YWJsZT48L2Rpdj4nOwpodG1sKz1gPHA+PGI+U2FsYXJ5IFNoYXJlIFByZXZpZXc6PC9iPiAke21vbmV5KHNhbGFyeSl9PC9wPgo8cD48Yj5Db21wYW55IFNoYXJlOjwvYj4gJHttb25leShjb21wYW55KX08L3A+YDsKJCgncmVzdWx0JykuaW5uZXJIVE1MPWh0bWw7CgokKCdmaW5hbGl6ZScpLmRpc2FibGVkPXJvbGUhPT0nbWFzdGVyJ3x8ci50b3RhbDw9MHx8CnIudG90YWxEYXlzPD0wfHxyLm92ZXJsYXBzfHxyLm1peGVkfHx0cnVuY2F0ZWR8fAppc0xvY2tlZChyLmEsci5iKTsKfWNhdGNoKGUpewokKCdyZXN1bHQnKS50ZXh0Q29udGVudD1lLm1lc3NhZ2U7CiQoJ2ZpbmFsaXplJykuZGlzYWJsZWQ9dHJ1ZTsKfQp9CgokKCdzaWduSW4nKS5vbmNsaWNrPSgpPT5hY3Rpb24oYXN5bmMoKT0+ewpjb25zdCB7ZXJyb3J9PWF3YWl0IGRiLmF1dGguc2lnbkluV2l0aFBhc3N3b3JkKHsKZW1haWw6JCgnZW1haWwnKS52YWx1ZS50cmltKCksCnBhc3N3b3JkOiQoJ3Bhc3N3b3JkJykudmFsdWUKfSk7CmlmKGVycm9yKXRocm93IGVycm9yOwphd2FpdCBlbnRlcigpOwp9KTsKJCgnc2lnbk91dCcpLm9uY2xpY2s9KCk9PmFjdGlvbihhc3luYygpPT57CmF3YWl0IGRiLmF1dGguc2lnbk91dCgpOwpsb2NhdGlvbi5yZWxvYWQoKTsKfSk7CiQoJ3NpdGUnKS5vbmNoYW5nZT1sb2FkOwokKCdyZWZyZXNoJykub25jbGljaz1sb2FkOwokKCdmcm9tJykub25jaGFuZ2U9Y2FsY3VsYXRlOwokKCd0bycpLm9uY2hhbmdlPWNhbGN1bGF0ZTsKCiQoJ2FkZEcnKS5vbmNsaWNrPSgpPT5hY3Rpb24oYXN5bmMoKT0+ewpjb25zdCBwdXJjaGFzZV9kYXRlPSQoJ2dkYXRlJykudmFsdWU7CmNvbnN0IGFtb3VudD1OdW1iZXIoJCgnZ2Ftb3VudCcpLnZhbHVlKTsKY29uc3QgZGVzY3JpcHRpb249JCgnZ2Rlc2MnKS52YWx1ZS50cmltKCk7CmlmKCFwdXJjaGFzZV9kYXRlfHwhTnVtYmVyLmlzRmluaXRlKGFtb3VudCl8fGFtb3VudDw9MCkKdGhyb3cgRXJyb3IoJ0VudGVyIHZhbGlkIGdyb2NlcnkgZGF0ZSBhbmQgYW1vdW50Jyk7CgppZihzZXR0bGVtZW50cy5zb21lKHM9PnMuc3RhdHVzPT09J2ZpbmFsJyYmCnB1cmNoYXNlX2RhdGU+PXMucGVyaW9kX3N0YXJ0JiZwdXJjaGFzZV9kYXRlPD1zLnBlcmlvZF9lbmQpKQp0aHJvdyBFcnJvcignRGF0ZSBpcyBhbHJlYWR5IGluIGEgZmluYWxpemVkIHNldHRsZW1lbnQnKTsKCmlmKCFjb25maXJtKCdTYXZlIEdyb2NlcnkgJyttb25leShhbW91bnQpKyc/JykpcmV0dXJuOwphd2FpdCBxdWVyeShkYi5mcm9tKCdmb29kX2dyb2NlcnknKS5pbnNlcnQoewpzaXRlX2lkOnNpZCgpLHB1cmNoYXNlX2RhdGUsYW1vdW50LGRlc2NyaXB0aW9uCn0pLnNlbGVjdCgnaWQnKSk7CiQoJ2dhbW91bnQnKS52YWx1ZT0nJzsKJCgnZ2Rlc2MnKS52YWx1ZT0nJzsKYXdhaXQgbG9hZCgpOwp9KTsKCiQoJ2FkZFAnKS5vbmNsaWNrPSgpPT5hY3Rpb24oYXN5bmMoKT0+ewpjb25zdCB3b3JrZXJfaWQ9JCgnd29ya2VyJykudmFsdWU7CmNvbnN0IHN0YXJ0X2RhdGU9JCgncGZyb20nKS52YWx1ZTsKY29uc3QgZW5kX2RhdGU9JCgncHRvJykudmFsdWU7CmNvbnN0IHBheW1lbnRfdHlwZT0kKCdwdHlwZScpLnZhbHVlOwppZighd29ya2VyX2lkfHwhdmFsaWREYXRlcyhzdGFydF9kYXRlLGVuZF9kYXRlKSkKdGhyb3cgRXJyb3IoJ0Nob29zZSB3b3JrZXIgYW5kIHZhbGlkIGRhdGVzJyk7CgppZihwZXJpb2RzLnNvbWUocD0+U3RyaW5nKHAud29ya2VyX2lkKT09PXdvcmtlcl9pZCYmCnAuc3RhcnRfZGF0ZTw9ZW5kX2RhdGUmJnN0YXJ0X2RhdGU8PXAuZW5kX2RhdGUpKQp0aHJvdyBFcnJvcignT3ZlcmxhcHBpbmcgZm9vZCBwZXJpb2QgZm9yIHdvcmtlcicpOwoKaWYoc2V0dGxlbWVudHMuc29tZShzPT5zLnN0YXR1cz09PSdmaW5hbCcmJgpzLnBlcmlvZF9zdGFydDw9ZW5kX2RhdGUmJnMucGVyaW9kX2VuZD49c3RhcnRfZGF0ZSkpCnRocm93IEVycm9yKCdEYXRlcyBvdmVybGFwIGEgZmluYWxpemVkIHNldHRsZW1lbnQnKTsKCmlmKCFjb25maXJtKCdTYXZlIEZvb2QgUGVyaW9kPycpKXJldHVybjsKYXdhaXQgcXVlcnkoZGIuZnJvbSgnd29ya2VyX2Zvb2RfcGVyaW9kcycpLmluc2VydCh7CnNpdGVfaWQ6c2lkKCksd29ya2VyX2lkLHN0YXJ0X2RhdGUsZW5kX2RhdGUscGF5bWVudF90eXBlCn0pLnNlbGVjdCgnaWQnKSk7CmF3YWl0IGxvYWQoKTsKfSk7CgokKCdncm9jZXJpZXMnKS5vbmNsaWNrPWU9PnsKY29uc3QgaWQ9ZS50YXJnZXQuZGF0YXNldC5nOwppZighaWR8fHJvbGUhPT0nbWFzdGVyJylyZXR1cm47CmFjdGlvbihhc3luYygpPT57CmNvbnN0IGc9Z3JvY2VyaWVzLmZpbmQoeD0+U3RyaW5nKHguaWQpPT09aWQpOwppZighZyl0aHJvdyBFcnJvcignR3JvY2VyeSBub3QgZm91bmQnKTsKaWYoc2V0dGxlbWVudHMuc29tZShzPT5zLnN0YXR1cz09PSdmaW5hbCcmJgpnLnB1cmNoYXNlX2RhdGU+PXMucGVyaW9kX3N0YXJ0JiZnLnB1cmNoYXNlX2RhdGU8PXMucGVyaW9kX2VuZCkpCnRocm93IEVycm9yKCdDYW5ub3QgZGVsZXRlIGdyb2NlcnkgZnJvbSBmaW5hbGl6ZWQgcGVyaW9kJyk7CmlmKCFjb25maXJtKCdEZWxldGUgdGhpcyBncm9jZXJ5PycpKXJldHVybjsKYXdhaXQgcXVlcnkoZGIuZnJvbSgnZm9vZF9ncm9jZXJ5JykuZGVsZXRlKCkKLmVxKCdpZCcsaWQpLmVxKCdzaXRlX2lkJyxzaWQoKSkuc2VsZWN0KCdpZCcpKTsKYXdhaXQgbG9hZCgpOwp9KTsKfTsKCiQoJ3BlcmlvZHMnKS5vbmNsaWNrPWU9PnsKY29uc3QgaWQ9ZS50YXJnZXQuZGF0YXNldC5wOwppZighaWR8fHJvbGUhPT0nbWFzdGVyJylyZXR1cm47CmFjdGlvbihhc3luYygpPT57CmNvbnN0IHA9cGVyaW9kcy5maW5kKHg9PlN0cmluZyh4LmlkKT09PWlkKTsKaWYoIXApdGhyb3cgRXJyb3IoJ0Zvb2QgcGVyaW9kIG5vdCBmb3VuZCcpOwppZihzZXR0bGVtZW50cy5zb21lKHM9PnMuc3RhdHVzPT09J2ZpbmFsJyYmCnMucGVyaW9kX3N0YXJ0PD1wLmVuZF9kYXRlJiZzLnBlcmlvZF9lbmQ+PXAuc3RhcnRfZGF0ZSkpCnRocm93IEVycm9yKCdDYW5ub3QgZGVsZXRlIHBlcmlvZCBvdmVybGFwcGluZyBmaW5hbGl6ZWQgc2V0dGxlbWVudCcpOwppZighY29uZmlybSgnRGVsZXRlIHRoaXMgZm9vZCBwZXJpb2Q/JykpcmV0dXJuOwphd2FpdCBxdWVyeShkYi5mcm9tKCd3b3JrZXJfZm9vZF9wZXJpb2RzJykuZGVsZXRlKCkKLmVxKCdpZCcsaWQpLmVxKCdzaXRlX2lkJyxzaWQoKSkuc2VsZWN0KCdpZCcpKTsKYXdhaXQgbG9hZCgpOwp9KTsKfTsKCiQoJ2ZpbmFsaXplJykub25jbGljaz0oKT0+YWN0aW9uKGFzeW5jKCk9PnsKaWYocm9sZSE9PSdtYXN0ZXInKXRocm93IEVycm9yKCdNYXN0ZXIgQWRtaW4gb25seScpOwpjb25zdCByPXJlcG9ydERhdGEoKTsKCmlmKHRydW5jYXRlZHx8ci5vdmVybGFwc3x8ci5taXhlZHx8ci50b3RhbDw9MHx8ci50b3RhbERheXM8PTB8fAppc0xvY2tlZChyLmEsci5iKSkKdGhyb3cgRXJyb3IoJ0Nhbm5vdCBmaW5hbGl6ZSB0aGlzIHBlcmlvZC4gQ2hlY2sgcmVwb3J0IHdhcm5pbmdzLicpOwoKY29uc3QgbWVzc2FnZT0KJ0ZJTkFMIEZPT0QgU0VUVExFTUVOVFxuXG4nKwonUGVyaW9kOiAnK3IuYSsnIHRvICcrci5iKydcbicrCidHcm9jZXJ5OiAnK21vbmV5KHIudG90YWwpKydcbicrCidGb29kLURheXM6ICcrci50b3RhbERheXMrJ1xuJysKJ1dvcmtlcnM6ICcrci5lbnRyaWVzLmxlbmd0aCsnXG5cbicrCidUaGlzIHdpbGwgcGVybWFuZW50bHkgcmVjb3JkIHRoZSBzZXR0bGVtZW50LlxuJysKJ0l0IHdpbGwgTk9UIGRlZHVjdCBzYWxhcnkuXG5cbicrCidDb250aW51ZT8nOwoKaWYoIWNvbmZpcm0obWVzc2FnZSkpcmV0dXJuOwoKJCgnZmluYWxpemUnKS5kaXNhYmxlZD10cnVlOwptc2coJ0ZpbmFsaXppbmcgc2V0dGxlbWVudC4uLicpOwoKY29uc3Qge2RhdGEsZXJyb3J9PWF3YWl0IGRiLnJwYygnZmluYWxpemVfZm9vZF9zZXR0bGVtZW50Jyx7CnBfc2l0ZV9pZDpzaWQoKSwKcF9zdGFydDpyLmEsCnBfZW5kOnIuYgp9KTsKaWYoZXJyb3IpdGhyb3cgZXJyb3I7Cm1zZygnU2V0dGxlbWVudCBmaW5hbGl6ZWQ6ICcrZGF0YSk7CmF3YWl0IGxvYWQoKTsKfSk7Cgppbml0KCkuY2F0Y2goZmFpbCk7Cjwvc2NyaXB0Pgo8L2JvZHk+CjwvaHRtbD4K';
+function decodeFood(){
+const bytes=Uint8Array.from(atob(EMBEDDED_FOOD_HTML),c=>c.charCodeAt(0));
+return new TextDecoder().decode(bytes);
+}
+async function foodManagement(site){
+$('content').innerHTML='<h2>Food Management · V5.18</h2><p class="muted">New food periods only for active workers. Archived worker history remains available. This is a separate test module.</p><p><a href="food-v518-fixed.html" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px;border-radius:8px">Open Food Management ↗</a></p>';
+notice('Food Management loaded');
+}
+async function salaryPayment(site){
+if(role!=='master'){notice('Master only');return}
+let d=date();
+$('content').innerHTML=`<h2>Salary Payment · Safety Preview</h2>
+<p class="muted">TEST MODE: Payment saving is disabled until the database guard is practically verified using a new active test worker. Existing payment history can be viewed. No real payment will be saved here.</p>
+<label>Worker<select id="pw"></select></label>
+<div class="grid">
+<label>Period From<input id="pf" type="date" value="${d.slice(0,7)}-01"></label>
+<label>Period To<input id="pt" type="date" value="${d}"></label>
+</div>
+<label>Payment Date<input id="pd" type="date" value="${d}"></label>
+<label>Amount ₹<input id="pa" type="number" min="0.01" step="0.01" placeholder="Amount"></label>
+<label>Notes<input id="pn" type="text" placeholder="Optional"></label>
+<div class="actions"><button id="ps" disabled title="Awaiting practical database guard test">Save Disabled · Test Mode</button><button class="alt" id="pr">Refresh History</button></div>
+<div id="ph"></div>`;
+let list=await fullWorkers(site);
+$('pw').innerHTML=workerOptions(list.filter(x=>!x.is_deleted&&x.is_active!==false));
+const history=async()=>{
+let worker=$('pw').value;if(!worker){$('ph').textContent='Select worker';return}
+let r=await db.from('worker_salary_payments').select('payment_date,period_start,period_end,amount,notes')
+.eq('site_id',site).eq('worker_id',worker).order('payment_date',{ascending:false}).limit(100);
+if(r.error){notice(r.error.message);return}
+$('ph').innerHTML='<h3>Previous Salary Payments</h3>'+((r.data||[]).map(x=>
+`<div class="card"><b>${cash(x.amount)}</b><small>Paid: ${esc(x.payment_date)} · Period: ${esc(x.period_start)} to ${esc(x.period_end)}</small><small>${esc(x.notes||'')}</small></div>`).join('')||'<p class="muted">No payments</p>');
+};
+$('pw').onchange=history;$('pr').onclick=history;
+$('ps').onclick=async()=>{notice('Test mode: payment saving disabled until guard verification');return;
+let worker=$('pw').value,from=$('pf').value,to=$('pt').value,pd=$('pd').value,amount=Number($('pa').value);
+if(!worker||!from||!to||from>to||pd<from||pd>to||!Number.isFinite(amount)||amount<=0){notice('Check worker, dates and positive amount');return}
+if(!confirm('Save REAL salary payment '+cash(amount)+'?'))return;
+$('ps').disabled=true;notice('Saving with database guard...');
+try{
+let r=await db.from('worker_salary_payments').insert({
+site_id:site,worker_id:worker,period_start:from,period_end:to,
+payment_date:pd,amount,notes:$('pn').value.trim()||null
+}).select('id');
+if(r.error)throw r.error;
+if(!r.data?.length)throw Error('Payment not confirmed');
+$('pa').value='';$('pn').value='';
+await history();notice('Salary payment saved: '+cash(amount));
+}catch(e){notice('PAYMENT NOT SAVED: '+e.message)}
+finally{$('ps').disabled=false}
+};
+await history();
+}
+
+loadLibrary();
+</script>
+</body>
+</html>
