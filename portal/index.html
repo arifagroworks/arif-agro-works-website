@@ -650,34 +650,68 @@ notice('Food Management loaded');
 }
 async function salaryPayment(site){
 if(role!=='master'){notice('Master only');return}
-let d=date();
-$('content').innerHTML=`<h2>Salary Payment · Safety Preview</h2>
-<p class="muted">TEST MODE: Payment saving is disabled until the database guard is practically verified using a new active test worker. Existing payment history can be viewed. No real payment will be saved here.</p>
+const d=date();
+$('content').innerHTML=`<h2>Salary Payments · Verified Balance Preview</h2>
+<p class="muted">Finalized food deductions, advances and earlier payments are included. The database must independently reject overpayments. Save only genuine salary payments.</p>
 <label>Worker<select id="pw"></select></label>
-<div class="grid">
-<label>Period From<input id="pf" type="date" value="${d.slice(0,7)}-01"></label>
-<label>Period To<input id="pt" type="date" value="${d}"></label>
-</div>
+<div class="grid"><label>Period From<input id="pf" type="date" value="${d.slice(0,7)}-01"></label>
+<label>Period To<input id="pt" type="date" value="${d}"></label></div>
+<button class="alt" id="pc">Calculate Payable</button><div id="payPreview"></div>
 <label>Payment Date<input id="pd" type="date" value="${d}"></label>
 <label>Amount ₹<input id="pa" type="number" min="0.01" step="0.01" placeholder="Amount"></label>
-<label>Notes<input id="pn" type="text" placeholder="Optional"></label>
-<div class="actions"><button id="ps" disabled title="Awaiting practical database guard test">Save Disabled · Test Mode</button><button class="alt" id="pr">Refresh History</button></div>
+<label>Notes<input id="pn" type="text" placeholder="Payment reference / remarks"></label>
+<div class="actions"><button id="ps" disabled>Calculate Before Saving</button><button class="alt" id="pr">Refresh History</button></div>
 <div id="ph"></div>`;
-let list=await fullWorkers(site);
-$('pw').innerHTML=workerOptions(list.filter(x=>!x.is_deleted&&x.is_active!==false));
+let list=await fullWorkers(site);list=list.filter(x=>!x.is_deleted&&x.is_active!==false);
+$('pw').innerHTML=workerOptions(list);
+let verified=null;
+const invalidate=()=>{verified=null;$('ps').disabled=true;$('ps').textContent='Calculate Before Saving';$('payPreview').textContent='';};
+for(const key of ['pw','pf','pt'])$(key).addEventListener('change',invalidate);
 const history=async()=>{
 let worker=$('pw').value;if(!worker){$('ph').textContent='Select worker';return}
 let r=await db.from('worker_salary_payments').select('payment_date,period_start,period_end,amount,notes')
 .eq('site_id',site).eq('worker_id',worker).order('payment_date',{ascending:false}).limit(100);
-if(r.error){notice(r.error.message);return}
+if(r.error)throw r.error;
 $('ph').innerHTML='<h3>Previous Salary Payments</h3>'+((r.data||[]).map(x=>
 `<div class="card"><b>${cash(x.amount)}</b><small>Paid: ${esc(x.payment_date)} · Period: ${esc(x.period_start)} to ${esc(x.period_end)}</small><small>${esc(x.notes||'')}</small></div>`).join('')||'<p class="muted">No payments</p>');
 };
-$('pw').onchange=history;$('pr').onclick=history;
-$('ps').onclick=()=>notice('Payment write is locked in V5.34 RC. No salary payments can be created from this build.');
-await history();
+const calculate=async()=>{
+const worker=$('pw').value,from=$('pf').value,to=$('pt').value;
+if(!worker||!from||!to||from>to)throw Error('Select a worker and valid period');
+const w=list.find(x=>String(x.id)===worker);if(!w)throw Error('Worker not active');
+const data=await salaryData(site,from,to,worker),x=calculateWorker(w,data);
+const due=Math.round(x.due*100)/100;
+verified={worker,from,to,due};
+$('payPreview').innerHTML=`<div class="card"><b>${esc(w.full_name)}</b>
+<small>Wages ${cash(x.wage)} + OT ${cash(x.otPay)} = Gross ${cash(x.gross)}</small>
+<small>Advances ${cash(x.advance)} · Manual Food ${cash(x.manualFood)} · Final Food ${cash(x.finalFood)} · Already Paid ${cash(x.paid)}</small>
+<b>Available Balance: ${cash(due)}</b></div>`;
+$('ps').disabled=!(due>0);$('ps').textContent=due>0?'Save Actual Salary Payment':'No Positive Balance';
+return verified;
+};
+$('pc').onclick=async()=>{try{await calculate();notice('Salary calculated. Check all deductions.')}catch(e){invalidate();notice('Calculation Error: '+e.message)}};
+$('pr').onclick=async()=>{try{await history()}catch(e){notice(e.message)}};
+$('ps').onclick=async()=>{
+if(!verified)return;
+const amount=Number($('pa').value),payment_date=$('pd').value;
+if(!Number.isFinite(amount)||amount<=0||Math.round(amount*100)!==amount*100||!payment_date){notice('Enter valid date and positive amount with at most 2 decimals');return}
+$('ps').disabled=true;
+try{
+// Re-read balances immediately before inserting; server trigger must enforce the limit atomically.
+const old={...verified};const fresh=await calculate();
+if(old.worker!==fresh.worker||old.from!==fresh.from||old.to!==fresh.to)throw Error('Worker or period changed');
+if(amount>fresh.due+0.00001)throw Error('Amount exceeds outstanding balance');
+if(!confirm(`SAVE ACTUAL SALARY PAYMENT?\nAmount: ${cash(amount)}\nOutstanding before payment: ${cash(fresh.due)}\nThis creates a permanent financial record.`))return;
+const payload={worker_id:fresh.worker,site_id:site,payment_date,period_start:fresh.from,period_end:fresh.to,amount,notes:$('pn').value.trim()||null};
+const r=await db.from('worker_salary_payments').insert(payload).select('worker_id,amount');
+if(r.error)throw r.error;
+if(!r.data||r.data.length!==1)throw Error('Payment not confirmed by server');
+notice('Salary payment saved online');$('pa').value='';invalidate();await history();
+}catch(e){notice('Salary payment NOT saved: '+e.message)}
+finally{if(verified)$('ps').disabled=!(verified.due>0)}
+};
+try{await history()}catch(e){notice(e.message)}
 }
-
 loadLibrary();
 </script>
 </body>
