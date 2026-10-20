@@ -231,7 +231,7 @@ function billingPanel(){
 async function render(){
 let n=++seq,site=$('site').value;
 if(!site){$('content').textContent='No assigned sites';return}
-let allowed=tabs.filter(x=>role==='master'||!['summary','slip','salary','ledger','mastertools','billing'].includes(x[0]));
+let allowed=tabs.filter(x=>role==='master'||!['summary','slip','ledger','mastertools','billing'].includes(x[0]));
 if(!allowed.some(x=>x[0]===tab))tab='workers';
 $('tabs').innerHTML=allowed.map(x=>`<button data-tab="${x[0]}" class="${tab===x[0]?'active':''}">${x[1]}</button>`).join('');
 $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
@@ -649,9 +649,9 @@ $('content').innerHTML='<h2>Food Management · V5.18</h2><p class="muted">New fo
 notice('Food Management loaded');
 }
 async function salaryPayment(site){
-if(role!=='master'){notice('Master only');return}
+if(!['master','incharge'].includes(role)){notice('Salary access denied');return}
 const d=date();
-$('content').innerHTML=`<h2>Salary Payments · Verified Balance Preview</h2>
+$('content').innerHTML=`<h2>Salary Payments · Balance & Payment Register</h2>
 <p class="muted">Finalized food deductions, advances and earlier payments are included. The database must independently reject overpayments. Save only genuine salary payments.</p>
 <label>Worker<select id="pw"></select></label>
 <div class="grid"><label>Period From<input id="pf" type="date" value="${d.slice(0,7)}-01"></label>
@@ -665,8 +665,9 @@ $('content').innerHTML=`<h2>Salary Payments · Verified Balance Preview</h2>
 let list=await fullWorkers(site);list=list.filter(x=>!x.is_deleted&&x.is_active!==false);
 $('pw').innerHTML=workerOptions(list);
 let verified=null;
+let savingSalary=false;
 const invalidate=()=>{verified=null;$('ps').disabled=true;$('ps').textContent='Calculate Before Saving';$('payPreview').textContent='';};
-for(const key of ['pw','pf','pt'])$(key).addEventListener('change',invalidate);
+for(const key of ['pw','pf','pt','pd'])$(key).addEventListener('change',invalidate);
 const history=async()=>{
 let worker=$('pw').value;if(!worker){$('ph').textContent='Select worker';return}
 let r=await db.from('worker_salary_payments').select('payment_date,period_start,period_end,amount,notes')
@@ -692,10 +693,11 @@ return verified;
 $('pc').onclick=async()=>{try{await calculate();notice('Salary calculated. Check all deductions.')}catch(e){invalidate();notice('Calculation Error: '+e.message)}};
 $('pr').onclick=async()=>{try{await history()}catch(e){notice(e.message)}};
 $('ps').onclick=async()=>{
-if(!verified)return;
+if(!verified||savingSalary)return;
 const amount=Number($('pa').value),payment_date=$('pd').value;
-if(!Number.isFinite(amount)||amount<=0||Math.round(amount*100)!==amount*100||!payment_date){notice('Enter valid date and positive amount with at most 2 decimals');return}
-$('ps').disabled=true;
+if(!Number.isFinite(amount)||amount<=0||Math.abs(Math.round(amount*100)-amount*100)>0.000001||!payment_date){notice('Enter valid date and positive amount with at most 2 decimals');return}
+if(payment_date<verified.from||payment_date>verified.to){notice('Payment date must be within salary period');return}
+$('ps').disabled=true;savingSalary=true;
 try{
 // Re-read balances immediately before inserting; server trigger must enforce the limit atomically.
 const old={...verified};const fresh=await calculate();
@@ -706,9 +708,9 @@ const payload={worker_id:fresh.worker,site_id:site,payment_date,period_start:fre
 const r=await db.from('worker_salary_payments').insert(payload).select('worker_id,amount');
 if(r.error)throw r.error;
 if(!r.data||r.data.length!==1)throw Error('Payment not confirmed by server');
-notice('Salary payment saved online');$('pa').value='';invalidate();await history();
-}catch(e){notice('Salary payment NOT saved: '+e.message)}
-finally{if(verified)$('ps').disabled=!(verified.due>0)}
+notice('Salary payment saved online');$('pa').value='';invalidate();try{await history()}catch(histErr){notice('Payment saved online; history refresh failed: '+histErr.message)}
+}catch(e){notice('Salary payment NOT confirmed: '+e.message)}
+finally{savingSalary=false;if(verified)$('ps').disabled=!(verified.due>0)}
 };
 try{await history()}catch(e){notice(e.message)}
 }
