@@ -39,7 +39,7 @@ button{transition:filter .15s,transform .15s;font-weight:600}button:hover{filter
 const AAW_URL='https://qfydekphbdpvvczhimjs.supabase.co';
 const AAW_KEY='sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn';
 let aawDb=null, aawUser=null, cloudEditing=null, cloudDocs=[];
-let aawCloudReady=false;
+let aawCloudReady=false;let aawSites=[];
 const gate=document.getElementById('aawGate');
 function aawStatus(message,state){
  const el=document.getElementById('aawCloudStatus');const label=document.getElementById('aawStorageLabel');
@@ -58,8 +58,38 @@ async function cloudInit(){
   if(pe||profile?.role!=='master')throw Error('Access denied: Master Admin only.');
   aawUser=user;
   document.body.style.visibility='visible';gate.remove();
+  await aawLoadSites();
   await cloudList();
  }catch(err){aawStatus(err.message||String(err),'error');gateMessage(err.message||String(err));}
+}
+function aawSiteName(id){return aawSites.find(s=>s.id===id)?.site_name||'UNASSIGNED SITE';}
+async function aawLoadSites(){
+ const {data,error}=await aawDb.from('sites').select('id,site_name').order('site_name');
+ if(error)throw Error('Cannot load sites: '+error.message);
+ aawSites=data||[];
+ if(!aawSites.length)throw Error('No sites available.');
+ const panel=document.createElement('section');panel.className='panel controls';
+ panel.innerHTML='<h2>Bill Site · Required</h2><div class="field"><label for="aawBillSite">Select Site for this document</label><select id="aawBillSite" required><option value="">— Select Site —</option></select></div><p class="muted">Site assignment is required for online saving and complete site-wise archives. Existing unmapped bills can be assigned below.</p>';
+ const anchor=document.querySelector('section.panel.controls');
+ if(!anchor)throw Error('Billing editor not found');
+ anchor.parentNode.insertBefore(panel,anchor);
+ const select=document.getElementById('aawBillSite');
+ aawSites.forEach(site=>{const o=document.createElement('option');o.value=site.id;o.textContent=site.site_name;select.appendChild(o)});
+}
+async function aawAssignLegacy(id){
+ const bill=cloudDocs.find(x=>x.id===id);
+ if(!bill||bill.site_id)return alert('Bill is already assigned or unavailable.');
+ const siteId=document.getElementById('aawBillSite')?.value;
+ if(!siteId)return alert('First select the correct Site in Bill Site section.');
+ const name=aawSiteName(siteId);
+ if(!confirm('Assign '+bill.document_number+' to '+name+'? This will be recorded in billing edit history.'))return;
+ if(!confirm('Final confirmation: '+bill.document_number+' belongs to '+name+'. Continue?'))return;
+ const {data,error}=await aawDb.from('aaw_billing_documents')
+   .update({site_id:siteId,updated_by:aawUser.id})
+   .eq('id',id).is('site_id',null).select('id,site_id').maybeSingle();
+ if(error)return alert('Mapping failed: '+error.message+'\nNo mapping confirmed.');
+ if(!data)return alert('No record updated. Reload and check whether it was already mapped.');
+ await cloudList();alert(bill.document_number+' assigned to '+name+'.');
 }
 function safeBody(html){
  const template=document.createElement('template');template.innerHTML=String(html||'');
@@ -73,8 +103,11 @@ async function cloudSave(){
  const d=collect();d.letterbody=safeBody(d.letterbody);
  if(!d.docno.trim()){aawStatus('Document number required','ready');return alert('Document number required.');}
  if(cloudDocs.some(x=>x.id!==cloudEditing&&x.document_type===d.type&&x.document_number===d.docno.trim())){aawStatus('Duplicate document number','ready');return alert('This document number already exists for this document type. Please use a unique number.');}
+ const siteId=document.getElementById('aawBillSite')?.value;
+ if(!siteId){aawStatus('Select Site before saving','error');return alert('Select the Site for this bill.');}
+ if(cloudEditing){const existing=cloudDocs.find(x=>x.id===cloudEditing);if(existing?.site_id && existing.site_id!==siteId)return alert('Changing an already assigned Site is blocked. Contact Master Admin for controlled migration.');}
  const payload={...d};delete payload.id;
- const record={document_type:d.type,document_number:d.docno.trim(),document_date:d.date||null,client_name:d.client||'',payload,updated_by:aawUser.id};
+ const record={document_type:d.type,document_number:d.docno.trim(),document_date:d.date||null,client_name:d.client||'',payload,site_id:siteId,updated_by:aawUser.id};
  try{
   let result;
   if(cloudEditing)result=await aawDb.from('aaw_billing_documents').update(record).eq('id',cloudEditing).select('id').single();
@@ -84,17 +117,19 @@ async function cloudSave(){
  }catch(e){aawStatus('Save failed: '+e.message,'error');alert('Online save failed: '+e.message+'\nPlease check the cloud connection before retrying.');}
 }
 async function cloudList(){
- const {data,error}=await aawDb.from('aaw_billing_documents').select('id,document_type,document_number,document_date,client_name,payload,updated_at').order('updated_at',{ascending:false}).limit(200);
+ const {data,error}=await aawDb.from('aaw_billing_documents').select('id,site_id,document_type,document_number,document_date,client_name,payload,updated_at').order('updated_at',{ascending:false}).limit(200);
  if(error){aawStatus('Cloud list failed: '+error.message,'error');alert('Online documents could not load: '+error.message);return;}
  aawStatus('Cloud Connected · Master Admin','ready');
  cloudDocs=data||[];if(!cloudEditing)suggestCloudNumber();
- $('saved').innerHTML=cloudDocs.length?cloudDocs.map(d=>`<div class="savedrow"><span><b>${esc(d.document_number)}</b> · ${esc(d.document_type)}<br>${esc(d.client_name||'Company Document')} · ${esc(d.document_date||'')}</span><span><button data-cloud-load="${esc(d.id)}">Edit</button> <button data-cloud-history="${esc(d.id)}">History</button></span></div>`).join(''):'<p class="muted">No online documents yet.</p>';
+ $('saved').innerHTML=cloudDocs.length?cloudDocs.map(d=>`<div class="savedrow"><span><b>${esc(d.document_number)}</b> · ${esc(d.document_type)}<br>${esc(d.client_name||'Company Document')} · ${esc(d.document_date||'')} · ${esc(aawSiteName(d.site_id))}</span><span><button data-cloud-load="${esc(d.id)}">Edit</button> <button data-cloud-history="${esc(d.id)}">History</button>${!d.site_id?` <button data-cloud-map="${esc(d.id)}">Assign Site</button>`:''}</span></div>`).join(''):'<p class="muted">No online documents yet.</p>';
  $('saved').querySelectorAll('[data-cloud-load]').forEach(b=>b.addEventListener('click',()=>cloudLoad(b.dataset.cloudLoad)));
  $('saved').querySelectorAll('[data-cloud-history]').forEach(b=>b.addEventListener('click',()=>cloudHistory(b.dataset.cloudHistory)));
+ $('saved').querySelectorAll('[data-cloud-map]').forEach(b=>b.addEventListener('click',()=>aawAssignLegacy(b.dataset.cloudMap)));
 }
 function cloudLoad(id){
  const item=cloudDocs.find(d=>d.id===id);if(!item)return;
  const d=item.payload||{};cloudEditing=id;editing=null;
+ if(document.getElementById('aawBillSite'))document.getElementById('aawBillSite').value=item.site_id||'';
  ['type','company','gstin','phone','email','address','docno','date','gst','client','clientgst','project','location','notes'].forEach(k=>{if($(k))$(k).value=d[k]??''});
  $('letterbody').innerHTML=safeBody(d.letterbody||'');rows=Array.isArray(d.rows)?d.rows.map(r=>({...r})):[];
  drawRows();render();window.scrollTo({top:0,behavior:'smooth'});
@@ -118,7 +153,7 @@ function suggestCloudNumber(){
 const oldTypeChanged=typeChanged;
 typeChanged=function(){oldTypeChanged();suggestCloudNumber();render()};
 const oldNewDoc=newDoc;
-newDoc=function(){cloudEditing=null;oldNewDoc();suggestCloudNumber()};
+newDoc=function(){cloudEditing=null;const site=document.getElementById('aawBillSite');if(site)site.value='';oldNewDoc();suggestCloudNumber()};
 // Existing V1/V2 local draft restore/backup tools remain for offline recovery only.
 window.addEventListener('load',cloudInit);
 </script><script>
@@ -164,7 +199,7 @@ render();
 @media print{#aawLedgerPanel{display:none!important}}
 </style><script>
 // Payment ledger is linked to saved document UUID; database RLS enforces Master access.
-let aawPayments=[];let aawPaymentDoc=null;window.aawLedgerLoaded=false;let aawPaymentSaving=false;let aawLedgerRequest=0;
+let aawPayments=[];let aawPaymentDoc=null;window.aawLedgerLoaded=false;
 function aawLedgerUI(){
  const panel=document.createElement('section');panel.id='aawLedgerPanel';
  panel.innerHTML=`<h2>Client Payment Ledger · Master Admin</h2><p id="aawLedgerMessage">Save or open an online invoice to manage its payments.</p>
@@ -177,12 +212,12 @@ function aawLedgerUI(){
  document.getElementById('aawPayRefresh').addEventListener('click',aawLoadPayments);
 }
 async function aawLoadPayments(){
- const id=cloudEditing;const request=++aawLedgerRequest;const msg=document.getElementById('aawLedgerMessage');
+ const id=cloudEditing;const msg=document.getElementById('aawLedgerMessage');
  aawPaymentDoc=id;aawPayments=[];window.aawLedgerLoaded=false;
  if(!id||!aawCloudReady){msg.textContent='Save or open an online invoice first.';aawRenderPayments();render();return;}
  const {data,error}=await aawDb.from('aaw_client_payments').select('id,document_id,payment_date,amount,reference,mode').eq('document_id',id).order('payment_date',{ascending:false});
  if(error){msg.textContent='Payment ledger unavailable: '+error.message;aawRenderPayments();render();return;}
- if(request!==aawLedgerRequest||id!==cloudEditing)return;aawPayments=data||[];window.aawLedgerLoaded=true;msg.textContent='Payments linked to '+v('docno');aawRenderPayments();render();
+ if(id!==cloudEditing)return;aawPayments=data||[];window.aawLedgerLoaded=true;msg.textContent='Payments linked to '+v('docno');aawRenderPayments();render();
 }
 function aawRenderPayments(){
  const paid=aawPayments.reduce((sum,p)=>sum+Number(p.amount||0),0);const total=totals().grand;
@@ -190,7 +225,6 @@ function aawRenderPayments(){
  document.getElementById('aawPayList').innerHTML=aawPayments.map(p=>'<tr><td>'+esc(p.payment_date)+'</td><td>'+esc(p.reference)+'</td><td>'+esc(p.mode)+'</td><td>'+money(p.amount)+'</td></tr>').join('')||'<tr><td colspan="4">No recorded payments</td></tr>';
 }
 async function aawAddPayment(){
- if(aawPaymentSaving)return;
  if(!aawCloudReady||!cloudEditing)return alert('Open a saved cloud invoice first.');
  if(v('type')!=='invoice')return alert('Payments can be recorded against invoices only.');
  const amount=Number(document.getElementById('aawPayAmount').value),reference=document.getElementById('aawPayRef').value.trim();
@@ -199,22 +233,9 @@ async function aawAddPayment(){
  if(!window.aawLedgerLoaded||aawPaymentDoc!==cloudEditing)return alert('Payment ledger must load successfully before recording payments.');
  const options=values();const payable=totals().grand-(options.billStage==='regular'?0:options.previousCertified)-options.retention;const already=aawPayments.reduce((sum,p)=>sum+Number(p.amount||0),0);if(Math.round((already+amount)*100)>Math.round(payable*100))return alert('Payment exceeds outstanding invoice balance.');
  if(!confirm('Record payment of '+money(amount)+' with reference '+reference+'?'))return;
- aawPaymentSaving=true;const button=document.getElementById('aawPaySave');button.disabled=true;
- const documentId=cloudEditing;
- try{
-   // Refresh authoritative ledger immediately before posting; database guard remains final authority.
-   const fresh=await aawDb.from('aaw_client_payments').select('amount,reference').eq('document_id',documentId);
-   if(fresh.error)throw fresh.error;
-   if(documentId!==cloudEditing)throw Error('Invoice changed; payment cancelled.');
-   if((fresh.data||[]).some(p=>String(p.reference||'').trim().toLowerCase()===reference.toLowerCase()))throw Error('This reference is already recorded for this invoice.');
-   const freshPaid=(fresh.data||[]).reduce((sum,p)=>sum+Math.round(Number(p.amount||0)*100),0);
-   if(freshPaid+Math.round(amount*100)>Math.round(payable*100))throw Error('Payment exceeds the available invoice balance.');
-   const {error}=await aawDb.from('aaw_client_payments').insert({document_id:documentId,payment_date:date,amount,reference,mode,created_by:aawUser.id});
-   if(error)throw error;
-   document.getElementById('aawPayAmount').value='';document.getElementById('aawPayRef').value='';
-   try{await aawLoadPayments();}catch(refreshError){alert('Payment saved, but refresh failed. Use Refresh to see it.');}
- }catch(err){alert('Payment NOT saved: '+(err.message||String(err)));}
- finally{aawPaymentSaving=false;button.disabled=false;}
+ const {error}=await aawDb.from('aaw_client_payments').insert({document_id:cloudEditing,payment_date:date,amount,reference,mode,created_by:aawUser.id});
+ if(error)return alert('Payment NOT saved: '+error.message);
+ document.getElementById('aawPayAmount').value='';document.getElementById('aawPayRef').value='';await aawLoadPayments();
 }
 // Preserve previous cloud Save/Edit logic; load ledger after successful save or load.
 const aawPreviousCloudSave=cloudSave;
