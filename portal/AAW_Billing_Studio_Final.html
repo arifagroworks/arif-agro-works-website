@@ -164,7 +164,7 @@ render();
 @media print{#aawLedgerPanel{display:none!important}}
 </style><script>
 // Payment ledger is linked to saved document UUID; database RLS enforces Master access.
-let aawPayments=[];let aawPaymentDoc=null;window.aawLedgerLoaded=false;
+let aawPayments=[];let aawPaymentDoc=null;window.aawLedgerLoaded=false;let aawPaymentSaving=false;let aawLedgerRequest=0;
 function aawLedgerUI(){
  const panel=document.createElement('section');panel.id='aawLedgerPanel';
  panel.innerHTML=`<h2>Client Payment Ledger · Master Admin</h2><p id="aawLedgerMessage">Save or open an online invoice to manage its payments.</p>
@@ -177,12 +177,12 @@ function aawLedgerUI(){
  document.getElementById('aawPayRefresh').addEventListener('click',aawLoadPayments);
 }
 async function aawLoadPayments(){
- const id=cloudEditing;const msg=document.getElementById('aawLedgerMessage');
+ const id=cloudEditing;const request=++aawLedgerRequest;const msg=document.getElementById('aawLedgerMessage');
  aawPaymentDoc=id;aawPayments=[];window.aawLedgerLoaded=false;
  if(!id||!aawCloudReady){msg.textContent='Save or open an online invoice first.';aawRenderPayments();render();return;}
  const {data,error}=await aawDb.from('aaw_client_payments').select('id,document_id,payment_date,amount,reference,mode').eq('document_id',id).order('payment_date',{ascending:false});
  if(error){msg.textContent='Payment ledger unavailable: '+error.message;aawRenderPayments();render();return;}
- if(id!==cloudEditing)return;aawPayments=data||[];window.aawLedgerLoaded=true;msg.textContent='Payments linked to '+v('docno');aawRenderPayments();render();
+ if(request!==aawLedgerRequest||id!==cloudEditing)return;aawPayments=data||[];window.aawLedgerLoaded=true;msg.textContent='Payments linked to '+v('docno');aawRenderPayments();render();
 }
 function aawRenderPayments(){
  const paid=aawPayments.reduce((sum,p)=>sum+Number(p.amount||0),0);const total=totals().grand;
@@ -190,6 +190,7 @@ function aawRenderPayments(){
  document.getElementById('aawPayList').innerHTML=aawPayments.map(p=>'<tr><td>'+esc(p.payment_date)+'</td><td>'+esc(p.reference)+'</td><td>'+esc(p.mode)+'</td><td>'+money(p.amount)+'</td></tr>').join('')||'<tr><td colspan="4">No recorded payments</td></tr>';
 }
 async function aawAddPayment(){
+ if(aawPaymentSaving)return;
  if(!aawCloudReady||!cloudEditing)return alert('Open a saved cloud invoice first.');
  if(v('type')!=='invoice')return alert('Payments can be recorded against invoices only.');
  const amount=Number(document.getElementById('aawPayAmount').value),reference=document.getElementById('aawPayRef').value.trim();
@@ -198,9 +199,22 @@ async function aawAddPayment(){
  if(!window.aawLedgerLoaded||aawPaymentDoc!==cloudEditing)return alert('Payment ledger must load successfully before recording payments.');
  const options=values();const payable=totals().grand-(options.billStage==='regular'?0:options.previousCertified)-options.retention;const already=aawPayments.reduce((sum,p)=>sum+Number(p.amount||0),0);if(Math.round((already+amount)*100)>Math.round(payable*100))return alert('Payment exceeds outstanding invoice balance.');
  if(!confirm('Record payment of '+money(amount)+' with reference '+reference+'?'))return;
- const {error}=await aawDb.from('aaw_client_payments').insert({document_id:cloudEditing,payment_date:date,amount,reference,mode,created_by:aawUser.id});
- if(error)return alert('Payment NOT saved: '+error.message);
- document.getElementById('aawPayAmount').value='';document.getElementById('aawPayRef').value='';await aawLoadPayments();
+ aawPaymentSaving=true;const button=document.getElementById('aawPaySave');button.disabled=true;
+ const documentId=cloudEditing;
+ try{
+   // Refresh authoritative ledger immediately before posting; database guard remains final authority.
+   const fresh=await aawDb.from('aaw_client_payments').select('amount,reference').eq('document_id',documentId);
+   if(fresh.error)throw fresh.error;
+   if(documentId!==cloudEditing)throw Error('Invoice changed; payment cancelled.');
+   if((fresh.data||[]).some(p=>String(p.reference||'').trim().toLowerCase()===reference.toLowerCase()))throw Error('This reference is already recorded for this invoice.');
+   const freshPaid=(fresh.data||[]).reduce((sum,p)=>sum+Math.round(Number(p.amount||0)*100),0);
+   if(freshPaid+Math.round(amount*100)>Math.round(payable*100))throw Error('Payment exceeds the available invoice balance.');
+   const {error}=await aawDb.from('aaw_client_payments').insert({document_id:documentId,payment_date:date,amount,reference,mode,created_by:aawUser.id});
+   if(error)throw error;
+   document.getElementById('aawPayAmount').value='';document.getElementById('aawPayRef').value='';
+   try{await aawLoadPayments();}catch(refreshError){alert('Payment saved, but refresh failed. Use Refresh to see it.');}
+ }catch(err){alert('Payment NOT saved: '+(err.message||String(err)));}
+ finally{aawPaymentSaving=false;button.disabled=false;}
 }
 // Preserve previous cloud Save/Edit logic; load ledger after successful save or load.
 const aawPreviousCloudSave=cloudSave;
