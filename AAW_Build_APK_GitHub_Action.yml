@@ -1,0 +1,82 @@
+name: Build ARIF AGRO WORKS APK
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Restore Android source
+        run: |
+          cat <<'AAW_SOURCE' | base64 -d > source.zip
+          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
+          n6LhWKdhmlW1lVcUNMy7DK7WZRo0XPL9eNMXazgHhQq+LqjJha5zxA4qEhTGEHVz9B9QSwMEFAAAAAgAWoVUXcJIey/UAAAAfAEAADIAAABhbmRyb2lkLWFw
+          cC9hcHAvc3JjL21haW4vcmVzL2RyYXdhYmxlL2FwcF9pY29uLnhtbH2QQYvCMBCF7/srQrxW08Y4mmI97C7Fg56FvYU2mmBrQhrqsr9+21gVVDy94XvvDcMs
+          W1l449BvXZ2aVJxKZ3SZYeW9TQlpCiVr0UwGPilMTYQ9EicbMjCMhiE969KrDHMo7R0qqQ/KP9JWy7M1zu+ulWdrfSvi1dIKr26Jva6qL1MZl+FRDAlQfm/3
+          wW/hRYa3cRQrDi0HNebwh8mbLQn/zPP85RYaR7BAm+kiognazC4yhwCBBengjIVIENrDH7RlNGLTzmVBWNfscH8Gubx89fEPUEsBAhQDFAAAAAgAWoVUXeR7
+          y6G5AQAAKAMAAAoAAAAAAAAAAAAAAKSBAAAAAFJFQURNRS50eHRQSwECFAMUAAAACABahVRdrPEpg0gAAABMAAAAHQAAAAAAAAAAAAAApIHhAQAAYW5kcm9p
+          ZC1hcHAvZ3JhZGxlLnByb3BlcnRpZXNQSwECFAMUAAAACABahVRdxRiZ/aoAAAAQAQAAGwAAAAAAAAAAAAAApIFkAgAAYW5kcm9pZC1hcHAvc2V0dGluZ3Mu
+          Z3JhZGxlUEsBAhQDFAAAAAgAWoVUXWSRREFDAAAARQAAABgAAAAAAAAAAAAAAKSBRwMAAGFuZHJvaWQtYXBwL2J1aWxkLmdyYWRsZVBLAQIUAxQAAAAIAFqF
+          VF1bJxYBlgAAAOcAAAAcAAAAAAAAAAAAAACkgcADAABhbmRyb2lkLWFwcC9hcHAvYnVpbGQuZ3JhZGxlUEsBAhQDFAAAAAgAWoVUXaH1sw6sAQAAlwMAACcA
+          AAAAAAAAAAAAAKSBkAQAAC5naXRodWIvd29ya2Zsb3dzL2J1aWxkLWFuZHJvaWQtYXBrLnltbFBLAQIUAxQAAAAIAFqFVF0PamXHeAEAAK4CAAAsAAAAAAAA
+          AAAAAACkgYEGAABhbmRyb2lkLWFwcC9hcHAvc3JjL21haW4vQW5kcm9pZE1hbmlmZXN0LnhtbFBLAQIUAxQAAAAIAFqFVF0Q3SWwlwUAAFQPAABKAAAAAAAA
+          AAAAAACkgUMIAABhbmRyb2lkLWFwcC9hcHAvc3JjL21haW4vamF2YS9jb20vYXJpZmFncm93b3Jrcy9jb21iaW5lZC9NYWluQWN0aXZpdHkuamF2YVBLAQIU
+          AxQAAAAIAFqFVF3CSHsv1AAAAHwBAAAyAAAAAAAAAAAAAACkgUIOAABhbmRyb2lkLWFwcC9hcHAvc3JjL21haW4vcmVzL2RyYXdhYmxlL2FwcF9pY29uLnht
+          bFBLBQYAAAAACQAJAOMCAABmDwAAAAA=
+          AAW_SOURCE
+          unzip -q source.zip
+      - name: Build installable APK
+        working-directory: android-app
+        run: gradle --no-daemon assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AAW-Combined-APK
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
