@@ -199,7 +199,7 @@ workers.filter(w=>!w.is_deleted&&w.is_active!==false)
 else if(type==='cash')
 v='<select name="'+k+'"><option value="cash_in">Cash In</option><option value="cash_out">Cash Out</option></select>';
 else
-v=`<input name="${k}" type="${type}" ${req?'required':''} ${type==='number'?'min="0" step="0.01"':''} ${type==='date'?'value="'+date()+'"':''}>`;
+v=`<input name="${k}" type="${type}" ${req?'required':''} ${type==='number'?'min="0" step="0.01"':''} ${type==='date' && k!=='leaving_date'?'value="'+date()+'"':''}>`;
 return `<label>${name}${req?' *':''}${v}</label>`;
 }
 function masterTools(){
