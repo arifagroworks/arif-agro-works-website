@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Arif Agro Works V5.34 Unified Release Candidate</title>
+<title>Arif Agro Works | Management Portal</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#071b28;color:#eef6fa;font-family:Arial,sans-serif}
@@ -39,6 +39,45 @@ th:first-child,td:first-child{text-align:left}
 .slip table td,.slip table th{border-color:#aaa}
 .slip .muted{color:#555}
 footer{text-align:center;color:#abc3ce;font-size:12px;padding:20px}
+
+
+/* Arif Agro Works corporate UI refresh — presentation only */
+:root{color-scheme:light;--navy:#103b61;--navy-dark:#0b2946;--orange:#f47a29;--paper:#ffffff;--canvas:#f3f7fb;--ink:#17324b;--muted:#62788a;--line:#dce6ef;--shadow:0 10px 30px rgba(14,49,81,.07)}
+body{background:var(--canvas);color:var(--ink);font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;line-height:1.5}
+header{background:linear-gradient(112deg,var(--navy-dark),var(--navy));border-bottom:4px solid var(--orange);padding:18px clamp(16px,4vw,42px);box-shadow:0 5px 22px rgba(10,42,68,.13);gap:12px}
+header b{font-size:clamp(18px,2.6vw,24px);letter-spacing:.7px;color:#fff}
+header small{color:#c9e2f3;font-size:11px;letter-spacing:.6px}
+header button.alt{background:#fff;color:var(--navy);border:1px solid #fff}
+main{max-width:1120px;margin:24px auto;padding:0 clamp(12px,3vw,26px)}
+h2,h3{color:var(--navy-dark);letter-spacing:-.25px}
+.box{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:clamp(16px,2.5vw,26px);box-shadow:var(--shadow);margin-bottom:18px}
+label{color:#425d73;font-size:13px;font-weight:600}
+input,select,textarea{background:#fff;color:var(--ink);border:1px solid #cbd9e5;border-radius:10px;min-height:44px;outline-offset:2px}
+input:focus,select:focus,textarea:focus{border-color:#2276ac;box-shadow:0 0 0 3px rgba(36,118,172,.11);outline:0}
+button{background:var(--orange);color:#fff;border-radius:10px;min-height:42px;padding:10px 16px;box-shadow:0 3px 8px rgba(244,122,41,.14);transition:filter .15s,transform .15s}
+button:hover:not(:disabled){filter:brightness(.95)}
+button:active:not(:disabled){transform:translateY(1px)}
+button:focus-visible{outline:3px solid #5ca4d2;outline-offset:2px}
+button:disabled{opacity:.55;cursor:not-allowed}
+.alt,.tabs button{background:#eaf2f8;color:var(--navy);box-shadow:none}
+.tabs{gap:9px;margin-top:16px}
+.tabs button{font-size:13px;border:1px solid #d5e5ef;font-weight:650}
+.tabs button.active{background:var(--navy);color:#fff;border-color:var(--navy);box-shadow:0 4px 12px rgba(16,59,97,.15)}
+.card{background:#f8fbfe;border:1px solid var(--line);border-radius:12px;padding:16px;margin:10px 0;box-shadow:0 2px 8px rgba(18,58,91,.03)}
+.card small,small,.muted{color:var(--muted)}
+#notice,#loginMsg{color:#ad541f;background:#fff8f1;border-radius:8px;padding:7px 10px}
+.att{border-bottom:1px solid var(--line)}
+th,td{border:1px solid var(--line);padding:10px 8px}
+th{background:#e9f2f9;color:var(--navy-dark)}
+tr:nth-child(even) td{background:#fafcfe}
+.slip{border:1px solid var(--line);box-shadow:var(--shadow)}
+.slip table th{background:#eee;color:#111}
+.slip table td,.slip table th{border-color:#aaa}
+footer{color:var(--muted)}
+#login{max-width:500px;margin:44px auto 30px}
+#app>.box:first-child{border-top:4px solid var(--orange)}
+@media(max-width:600px){header{padding:14px 16px}header b{font-size:17px}header small{font-size:9px;letter-spacing:0}main{margin:14px auto}.box{border-radius:13px;padding:14px}.tabs button{flex:1 1 auto;min-height:42px}.grid{grid-template-columns:repeat(auto-fit,minmax(135px,1fr))}table{font-size:12px}th,td{padding:8px 5px}}
+
 </style>
 </head>
 <body>
