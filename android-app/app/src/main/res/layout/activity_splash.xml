@@ -1,48 +1,34 @@
 
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#021123">
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp"
+    android:background="#041324">
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <ImageView
+        android:layout_width="220dp"
+        android:layout_height="220dp"
+        android:src="@drawable/aaw_logo"
+        android:contentDescription="ARIF AGRO WORKS Logo"
+        android:scaleType="fitCenter"/>
+
+    <TextView
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="28dp">
+        android:layout_marginTop="20dp"
+        android:text="ARIF AGRO WORKS"
+        android:textColor="#27BFFF"
+        android:textSize="26sp"
+        android:textStyle="bold"/>
 
-        <ImageView
-            android:id="@+id/splashLogo"
-            android:layout_width="160dp"
-            android:layout_height="160dp"
-            android:contentDescription="ARIF AGRO WORKS Logo"
-            android:src="@android:drawable/ic_menu_gallery" />
+    <ProgressBar
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginTop="32dp"
+        android:indeterminateTint="#27BFFF"/>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="ARIF AGRO WORKS"
-            android:textColor="#FFFFFF"
-            android:textSize="26sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="FABRICATION SOLUTIONS"
-            android:textColor="#24B8F2"
-            android:textSize="14sp"
-            android:letterSpacing="0.12" />
-
-        <ProgressBar
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginTop="36dp"
-            android:indeterminateTint="#24B8F2" />
-
-    </LinearLayout>
-</FrameLayout>
+</LinearLayout>
