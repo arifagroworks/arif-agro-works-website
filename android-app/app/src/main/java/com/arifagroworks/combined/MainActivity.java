@@ -104,7 +104,7 @@ public class MainActivity extends Activity {
                         if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) android.util.Log.d("AAWNative", "Action="+data.optString("action"));
                         if ("save".equals(data.optString("action"))) saveExport(data);
                         else if ("print".equals(data.optString("action"))) printDocument(data);
-                    } catch (Exception error) { toast(error.getMessage()); }
+                    } catch (Exception error) { if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) android.util.Log.e("AAWNative", "Native request failed", error); toast(error.getMessage()); }
                 });
             if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
                 WebViewCompat.addDocumentStartJavaScript(web, nativeScript, Collections.singleton(NativePolicy.ORIGIN));
@@ -134,7 +134,7 @@ public class MainActivity extends Activity {
                 if (!NativePolicy.trusted(url)) return;
                 // Fallback for WebView providers without document-start script support.
                 String source = JSONObject.quote(nativeScript);
-                view.evaluateJavascript("(function(){const s=" + source + ";function run(w){try{w.eval(s);w.document.querySelectorAll('iframe').forEach(f=>{if(!f.dataset.aawNativeHook){f.dataset.aawNativeHook='1';f.addEventListener('load',()=>run(f.contentWindow));}run(f.contentWindow)});}catch(e){}}run(window);if(!window.aawNativeObserver){window.aawNativeObserver=new MutationObserver(()=>run(window));window.aawNativeObserver.observe(document.documentElement,{childList:true,subtree:true});}})()", null);
+                view.evaluateJavascript("(function(){const s=" + source + ";function run(w){try{w.eval(s);w.document.querySelectorAll('iframe').forEach(f=>{if(!f.dataset.aawNativeHook){f.dataset.aawNativeHook='1';f.addEventListener('load',()=>run(f.contentWindow));}run(f.contentWindow)});}catch(e){}}run(window);if(!window.aawNativeObserver&&document.documentElement){window.aawNativeObserver=new MutationObserver(()=>run(window));window.aawNativeObserver.observe(document.documentElement,{childList:true,subtree:true});}})()", null);
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame() && !isFinishing()) new AlertDialog.Builder(MainActivity.this)
@@ -217,7 +217,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onPageFinished(WebView v, String url) {
                 if (started) return; started = true;
-                v.postDelayed(() -> {
+                splashHandler.postDelayed(() -> {
                     if (isFinishing() || printWeb != v) return;
                     PrintDocumentAdapter delegate = v.createPrintDocumentAdapter(name);
                     PrintManager manager = (PrintManager) getSystemService(PRINT_SERVICE);
