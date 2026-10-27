@@ -173,6 +173,7 @@ jobs:
           disable-animations: true
           script: |
             adb shell settings put system system_locales en-US
+            adb shell settings put secure show_ime_with_hard_keyboard 1
             gradle --no-daemon -p android-app connectedDebugAndroidTest
             mkdir -p native-artifacts
             adb pull /sdcard/Download native-artifacts/Download
