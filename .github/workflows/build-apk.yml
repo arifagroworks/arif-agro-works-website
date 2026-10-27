@@ -102,6 +102,34 @@ jobs:
           "$AAPT" dump badging "$APK" | grep "versionName='1.4'"
           ls -lh "$APK"
 
+      - name: Verify release fails without owner signing configuration
+        shell: bash
+        run: |
+          if env -u AAW_KEYSTORE_PATH -u AAW_RELEASE_STORE_PASSWORD -u AAW_RELEASE_KEY_ALIAS -u AAW_RELEASE_KEY_PASSWORD gradle --no-daemon -p android-app assembleRelease > "$RUNNER_TEMP/unsigned-release-check.log" 2>&1; then
+            echo 'Release unexpectedly built without signing configuration'; exit 1
+          fi
+          grep -q 'Release signing is not configured' "$RUNNER_TEMP/unsigned-release-check.log"
+      - name: Compile release APK and bundle with an ephemeral CI-only test key
+        env:
+          AAW_RELEASE_STORE_PASSWORD: AAW-TEST-ONLY-NOT-PRODUCTION
+          AAW_RELEASE_KEY_PASSWORD: AAW-TEST-ONLY-NOT-PRODUCTION
+          AAW_RELEASE_KEY_ALIAS: ci-test-only
+        shell: bash
+        run: |
+          export AAW_KEYSTORE_PATH="$RUNNER_TEMP/aaw-ci-test-only.jks"
+          keytool -genkeypair -keystore "$AAW_KEYSTORE_PATH" -storetype JKS -alias "$AAW_RELEASE_KEY_ALIAS" -storepass:env AAW_RELEASE_STORE_PASSWORD -keypass:env AAW_RELEASE_KEY_PASSWORD -keyalg RSA -keysize 2048 -validity 2 -dname 'CN=AAW CI TEST ONLY' -noprompt
+          gradle --no-daemon -p android-app assembleRelease bundleRelease
+          APK=android-app/app/build/outputs/apk/release/app-release.apk
+          "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "${ANDROID_HOME}/build-tools/35.0.0/aapt" dump badging "$APK" > "$RUNNER_TEMP/release-badging.txt"
+          if grep -q application-debuggable "$RUNNER_TEMP/release-badging.txt"; then echo 'Release is debuggable'; exit 1; fi
+          unzip -Z -1 "$APK" > "$RUNNER_TEMP/release-entries.txt"
+          if grep -q assets/native-fixture- "$RUNNER_TEMP/release-entries.txt"; then echo 'Debug fixtures leaked into release'; exit 1; fi
+          test -s android-app/app/build/outputs/bundle/release/app-release.aab
+      - name: Remove ephemeral test signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/aaw-ci-test-only.jks"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

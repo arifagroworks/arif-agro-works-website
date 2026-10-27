@@ -59,6 +59,10 @@ jobs:
           cp android-app/app/build/outputs/apk/release/app-release.apk release-output/AAW-Release.apk
           cp android-app/app/build/outputs/bundle/release/app-release.aab release-output/AAW-Release.aab
           "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose --print-certs release-output/AAW-Release.apk > release-output/signing-certificate.txt
+          "${ANDROID_HOME}/build-tools/35.0.0/aapt" dump badging release-output/AAW-Release.apk > release-output/package-info.txt
+          if grep -q application-debuggable release-output/package-info.txt; then echo 'Release must not be debuggable'; exit 1; fi
+          unzip -Z -1 release-output/AAW-Release.apk > "$RUNNER_TEMP/release-entries.txt"
+          if grep -q assets/native-fixture- "$RUNNER_TEMP/release-entries.txt"; then echo 'Debug fixtures leaked into release'; exit 1; fi
           python3 - <<'PY'
           import json,re
           from pathlib import Path
