@@ -6,6 +6,10 @@ The private release signing backup is delivered privately, outside this reposito
 
 Open repository Settings → Secrets and variables → Actions. Create `AAW_RELEASE_KEYSTORE_BASE64`, `AAW_RELEASE_STORE_PASSWORD`, `AAW_RELEASE_KEY_ALIAS` and `AAW_RELEASE_KEY_PASSWORD` using their matching files in the private owner backup. The current GitHub connector cannot write repository secrets. No password/token should be pasted in chat.
 
+A first permanent owner-signed APK/AAB has already been delivered privately. The setup below enables future GitHub-hosted releases; it is not a prerequisite to installing that delivered APK.
+
+After adding the four secrets, run **AAW Android Release** for the first public release. Future main-branch version changes in `android-app/app/build.gradle` automatically run the owner release pipeline and publish after verification. Missing secrets produce a setup notice on automatic runs and prevent signing/publication; a manually requested release fails clearly if configuration is absent. Existing published versions are skipped, and update compatibility is checked against `android-release.json` from the previous release. Increase both versionName and versionCode; the permanent baseline is 1.4 / code 5.
+
 Run **AAW Android Release**. Verification includes browser/database tests and Android emulator checks before signing. The signed APK/AAB and SHA256SUMS are available as `AAW-Signed-Release`. Choose Publish when running the workflow to create `android-vVERSION` with a stable `releases/latest/download/AAW-Release.apk` URL. Future native updates must use the same key and an increased versionCode. Website/portal changes load online and do not require rebuilding the native wrapper.
 
 The first owner-signed release has a different certificate from earlier debug builds. Switching can require uninstall/reinstall; back up local drafts first. Cloud business records are not deleted by uninstalling an APK. Existing debug updates remain separate and use the workflow's debug-key cache.
