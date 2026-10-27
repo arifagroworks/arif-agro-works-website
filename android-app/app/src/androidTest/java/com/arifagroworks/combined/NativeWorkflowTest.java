@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.*;
 
-/** Entirely synthetic documents under loadDataWithBaseURL; no live login/mutation. */
+/** Hardcoded debug assets served at intercepted HTTPS URLs; no live login/mutation. */
 public class NativeWorkflowTest {
     @Rule public ActivityTestRule<MainActivity> rule = new ActivityTestRule<>(MainActivity.class, false, false);
     private MainActivity activity;
@@ -48,12 +48,11 @@ public class NativeWorkflowTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> activity.testWebView().evaluateJavascript(script, text -> {value.set(text);done.countDown();}));
         assertTrue("JS response", done.await(10, TimeUnit.SECONDS)); return value.get();
     }
-    private void page(String body) throws Exception {
-        String marker = Long.toString(System.nanoTime());
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> activity.testWebView().loadDataWithBaseURL(NativePolicy.BASE+"native-fixture.html", "<!doctype html><html><meta name='viewport' content='width=device-width, initial-scale=1'><title>AAW-Print-Test</title><style>body{font:22px sans-serif;padding:20px}button,input{font:22px sans-serif;padding:15px;margin:15px;display:block}@media print{button,input{display:none}}</style>"+body+"<i hidden id=fixture-"+marker+"></i></html>","text/html","UTF-8",NativePolicy.BASE+"native-fixture.html"));
+    private void page(String fixture) throws Exception {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> activity.testWebView().loadUrl(NativePolicy.BASE+"native-fixture-"+fixture+".html"));
         boolean ready=false;
-        for(int i=0;i<100;i++){ if("true".equals(js("!!window.AAWNativeSupport&&document.readyState==='complete'&&!!document.getElementById('fixture-"+marker+"')"))){ready=true;break;}SystemClock.sleep(100); }
-        assertTrue("Origin-scoped native bridge installed",ready);
+        for(int i=0;i<100;i++){ if("true".equals(js("!!window.AAWNativeSupport&&document.readyState==='complete'&&document.body?.dataset.fixture==='"+fixture+"'"))){ready=true;break;}SystemClock.sleep(100); }
+        assertTrue("Origin-scoped native bridge installed on the complete HTTPS fixture",ready);
     }
     private UiObject2 findText(String text) { return device.wait(Until.findObject(By.text(text)), 15000); }
     private void savePicker() throws Exception {
@@ -62,7 +61,7 @@ public class NativeWorkflowTest {
         assertNotNull("Android Save document action",save);save.click();
     }
     @Test public void csvExportUsesSystemPickerAndPreservesBytes() throws Exception {
-        page("<h1>AAW synthetic CSV</h1><button onclick=\"const a=document.createElement('a');a.download='AAW-native-smoke.csv';a.href=URL.createObjectURL(new Blob(['name,amount\\nSynthetic Worker,123.45\\n'],{type:'text/csv'}));a.click()\">Export CSV</button>");
+        page("csv");
         UiObject2 button=findText("Export CSV");assertNotNull(button);button.click();savePicker();
         for(int i=0;i<100&&activity.lastSavedUri==null;i++)SystemClock.sleep(100);
         assertNotNull("Saved URI returned",activity.lastSavedUri);
@@ -72,7 +71,7 @@ public class NativeWorkflowTest {
         }
     }
     @Test public void importFilePickerCanBeOpenedAndCanceled() throws Exception {
-        page("<h1>AAW import fixture</h1><label>Import JSON<input type='file' accept='.json' aria-label='Import JSON'></label>");
+        page("import");
         UiObject2 input=device.wait(Until.findObject(By.clazz("android.widget.Button")),15000);
         if(input==null)input=findText("Choose File");assertNotNull("File input",input);input.click();
         assertTrue("Android Files picker",device.wait(Until.hasObject(By.pkg("com.android.documentsui")),15000));
@@ -80,7 +79,7 @@ public class NativeWorkflowTest {
         assertEquals("true",js("!!document.querySelector('input[type=file]')"));
     }
     @Test public void nativePrintSavesARealPdf() throws Exception {
-        page("<h1>AAW-NATIVE-PRINT-FIXTURE</h1><p>Synthetic invoice only. Amount 123.45</p><button onclick='window.print()'>Print Test PDF</button>");
+        page("print");
         UiObject2 button=findText("Print Test PDF");assertNotNull(button);button.click();
         UiObject2 print=device.wait(Until.findObject(By.res("com.android.printspooler","print_button")),20000);
         assertNotNull("System PDF print preview",print);for(int i=0;i<100&&!print.isEnabled();i++)SystemClock.sleep(100);assertTrue("Print button enabled",print.isEnabled());print.click();savePicker();SystemClock.sleep(2000);
@@ -88,7 +87,7 @@ public class NativeWorkflowTest {
         assertTrue("Saved PDF exists",listing.contains(".pdf"));
     }
     @Test public void backNavigationAndKeyboardKeepTheAppUsable() throws Exception {
-        page("<h1>AAW navigation fixture</h1><input aria-label='Test name' id='name' placeholder='Test name'><button onclick=\"location.hash='second'\">Next screen</button>");
+        page("navigation");
         UiObject2 input=device.wait(Until.findObject(By.clazz("android.widget.EditText")),15000);assertNotNull(input);input.click();input.setText("Synthetic Name");device.pressBack();
         assertEquals("\"Synthetic Name\"",js("document.getElementById('name').value"));
         findText("Next screen").click();assertEquals("\"#second\"",js("location.hash"));device.pressBack();SystemClock.sleep(300);

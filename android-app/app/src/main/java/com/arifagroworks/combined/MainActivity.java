@@ -53,6 +53,7 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private File pendingExport;
     private String nativeScript;
+    private boolean smokeMode;
     private boolean restoring;
     private final ExecutorService fileWorker = Executors.newSingleThreadExecutor();
     private final Handler splashHandler = new Handler(Looper.getMainLooper());
@@ -80,6 +81,8 @@ public class MainActivity extends Activity {
     }
 
     private void openWebsite(Bundle state) {
+        smokeMode = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            && getIntent().getBooleanExtra("aawNativeSmoke", false);
         web = new WebView(this);
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -108,6 +111,19 @@ public class MainActivity extends Activity {
             }
         } else toast("Update Android System WebView to enable in-app PDF and file exports.");
         web.setWebViewClient(new WebViewClient() {
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                String url=request.getUrl().toString();
+                if (smokeMode && url.startsWith(BASE)) {
+                    String path=url.substring(BASE.length());
+                    if (path.matches("native-fixture-(start|csv|import|print|navigation)\\.html")) {
+                        try { return new WebResourceResponse("text/html", "UTF-8", getAssets().open(path)); }
+                        catch (Exception error) { return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0])); }
+                    }
+                    // Synthetic smoke runs must never fetch real business pages.
+                    return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
+                }
+                return null;
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (!request.isForMainFrame()) return false;
                 String url = request.getUrl().toString();
@@ -163,9 +179,7 @@ public class MainActivity extends Activity {
         protectInsets(viewport); setContentView(viewport); viewport.requestApplyInsets();
         if (state != null && state.getBundle("webState") != null && web.restoreState(state.getBundle("webState")) != null) restoring = true;
         if (!restoring) {
-            boolean smoke = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
-                && getIntent().getBooleanExtra("aawNativeSmoke", false);
-            if (smoke) web.loadDataWithBaseURL(BASE+"native-fixture.html", "<!doctype html><title>AAW synthetic fixture</title>", "text/html", "UTF-8", BASE+"native-fixture.html");
+            if (smokeMode) web.loadUrl(BASE+"native-fixture-start.html");
             else web.loadUrl(BASE);
         }
     }
