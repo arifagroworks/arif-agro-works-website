@@ -234,7 +234,7 @@ test('Native splash and Android 12+ startup use AAW branding, with no Android pl
   for(const file of fs.readdirSync(dir,{recursive:true}).filter(f=>/\.(xml|java)$/.test(f))) {
     assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/sym_def_app_icon/,file);
   }
-  assert.match(read('android-app/app/build.gradle'),/versionCode 4/);
+  assert.match(read('android-app/app/build.gradle'),/versionCode 5/);
 });
 test('Android viewport handles system bars and cutouts on current and older Android', () => {
   const java=read('android-app/app/src/main/java/com/arifagroworks/combined/MainActivity.java');
