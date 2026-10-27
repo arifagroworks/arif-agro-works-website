@@ -23,7 +23,7 @@ after(async () => { await new Promise(resolve => server?.close(resolve)); });
 
 // All non-local requests are intercepted. The Supabase SDK itself is replaced,
 // so tests cannot read or mutate production, even with a real browser session.
-async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-master', width = 390, demoWorkers = [] } = {}) {
+async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-master', width = 390, demoWorkers = [], operational = false, demoRows = {} } = {}) {
   const instance = await chromium.launch({ headless: true, ...(process.env.AAW_CHROMIUM_PATH ? { executablePath: process.env.AAW_CHROMIUM_PATH, args: ['--no-sandbox','--no-zygote','--single-process','--use-gl=angle','--use-angle=swiftshader','--in-process-gpu'] } : {}) });
   const context = await instance.newContext({ viewport: { width, height: 900 }, serviceWorkers: 'block' });
   const close = context.close.bind(context);
@@ -32,8 +32,9 @@ async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-ma
   page.setDefaultTimeout(5000);
   const external = [], errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  await context.addInitScript(({ role, sessionKey, demoWorkers }) => {
+  await context.addInitScript(({ role, sessionKey, demoWorkers, operational, demoRows }) => {
     window.mockCalls = [];
+    window.mockMutations=[];window.mockRpc=[];
     window.mockSignOut = [];
     const user = { id: 'demo-user' };
     window.supabase = { createClient(_url, _key, options = {}) {
@@ -50,19 +51,24 @@ async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-ma
         from(table) {
           window.mockCalls.push(table);
           let data = table === 'staff_profiles' ? { role, full_name: 'Demo Staff' }
-            : table === 'sites' ? [{ id: 'demo-site', site_name: 'Demo Site', is_active: true }] : table === 'site_assignments' ? [{site_id:'demo-site',user_id:'demo-user'}] : table === 'workers' ? demoWorkers : [];
+            : table === 'sites' ? [{ id: 'demo-site', site_name: 'Demo Site', is_active: true }] : table === 'site_assignments' ? [{site_id:'demo-site',user_id:'demo-user'}] : table === 'workers' ? demoWorkers : demoRows[table]||[];
           const q = new Proxy({}, { get(_target, method) {
             if (method === 'eq') return (key, value) => { if (table === 'staff_profiles' && key === 'role' && value === 'incharge') data = []; return q; };
             if (method === 'then') return resolve => resolve({ data, error: null });
-            if (['insert', 'update', 'delete', 'upsert'].includes(method)) throw Error('Unexpected database mutation in regression test');
+            if (['insert', 'update', 'delete', 'upsert'].includes(method)) {if(!operational)throw Error('Unexpected database mutation in regression test');return (...args)=>{window.mockMutations.push({table,method,args});data=[{id:'saved-row'}];return q;};}
             return () => q;
           }});
           return q;
         },
-        rpc() { throw Error('Unexpected RPC in regression test'); }
+        rpc(name,args) {
+          if(!operational)throw Error('Unexpected RPC in regression test');
+          window.mockRpc.push({name,args});
+          const answers={aaw_session_context:{user_id:'demo-user',role,full_name:'Demo Staff',enabled:true},aaw_incharge_choices:[{user_id:'demo-user',full_name:'Demo Incharge'}],aaw_food_preview:{grocery_total:300,total_food_days:3,can_finalize:true,entries:[{worker_id:'w1',full_name:'Worker One',food_days:3,payment_type:'salary_deduction',share_amount:300}]},aaw_site_financials:{billed:1000,collected:600,receivable:400,site_expenses:50,grocery_cash:100,salary_cash:300,advance_cash:50,earned_labour:500,company_food:100,cash_surplus:100,billed_operating_surplus:350}};
+          return Promise.resolve({data:answers[name]||'saved-id',error:null});
+        }
       };
     }};
-  }, { role, sessionKey, demoWorkers });
+  }, { role, sessionKey, demoWorkers, operational, demoRows });
   await context.route('**/*', route => {
     const requestUrl = route.request().url();
     if (requestUrl.startsWith(origin + '/')) return route.continue();
@@ -395,4 +401,33 @@ test('Classic branding matches native splash, Android 12 launch and WebView back
  assert.match(read('android-app/app/src/main/res/values-v31/styles.xml'),/windowSplashScreenBackground">#F5F0DF/);
  assert.match(read('android-app/app/src/main/java/com/arifagroworks/combined/MainActivity.java'),/web.setBackgroundColor\(Color.rgb\(245, 240, 223\)\)/);
  for(const name of ['index.html','food-v518-fixed.html','AAW_Billing_Studio_Final.html','AAW_Daily_Production_V526_Restore_Test.html','incharge-test-fixed.html','site-assignment-test.html','incharge-access-test.html','salary-test.html','AAW_Site_Backup_Master.html','v519-guard-check.html'])assert.match(read('portal/'+name),/aaw-design.css\?v=20261027A/,name);
+});
+
+test('Monthly salary uses date-effective rates without daily rounding and keeps old wage history',()=>{
+ const source=read('portal/index.html');const fn=source.slice(source.indexOf('function calculateWorker('),source.indexOf('async function fullWorkers('));const ctx=vm.createContext({});vm.runInContext(fn,ctx);
+ const data={attendance:[1,2,3].map(day=>({worker_id:'w1',attendance_date:'2026-10-0'+day,status:'present',overtime_hours:0})),advances:[],payments:[],rates:[{worker_id:'w1',effective_from:'2026-10-01',salary_basis:'monthly',monthly_salary:10000,overtime_hourly_rate:0}]};ctx.data=data;const actual=vm.runInContext("calculateWorker({id:'w1',daily_wage:1000},data)",ctx);assert.equal(actual.gross,1000);assert.equal(actual.due,1000);
+ ctx.data.attendance.unshift({worker_id:'w1',attendance_date:'2026-09-30',status:'present',overtime_hours:0});assert.equal(vm.runInContext("calculateWorker({id:'w1',daily_wage:1000},data).gross",ctx),2000);
+});
+for(const role of ['master','incharge'])test(`Operations ${role} can navigate Food, rates, cash and history while financials stay Master-only`,async()=>{
+ const {page,context,errors,external}=await openPage(`/portal/operations.html?role=${role}&section=rates`,{role,sessionKey:`aaw-portal-auth-${role}`,operational:true,demoWorkers:[{id:'w1',full_name:'Worker One',is_active:true}]});
+ try{await page.locator('#workspace').waitFor({state:'visible'});for(const section of ['rates','daily','periods','grocery','settlement','transfer','ledger','audit']){await page.locator(`[data-section="${section}"]`).click();await page.locator('#operationForm').waitFor();assert.equal(await page.locator('#modules [aria-current="page"]').getAttribute('data-section'),section)}assert.equal(await page.locator('[data-section="financials"]').count(),role==='master'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(errors,[]);assert.equal(external.some(u=>u.includes('.supabase.co')),false)}finally{await context.close()}
+});
+test('Operations saves monthly rate, daily Food and a manual owner-scoped cash entry with checked payloads',async()=>{
+ const {page,context}=await openPage('/portal/operations.html?role=incharge&section=rates',{role:'incharge',sessionKey:'aaw-portal-auth-incharge',operational:true,demoWorkers:[{id:'w1',full_name:'Worker One',is_active:true}]});
+ try{await page.locator('#operationForm').waitFor();await page.selectOption('[name=p_worker]','w1');await page.selectOption('[name=p_basis]','monthly');await page.fill('[name=p_monthly]','10000');await page.locator('#operationForm button[type=submit]').click();await page.waitForFunction(()=>window.mockRpc.some(x=>x.name==='aaw_set_worker_rate'));assert.equal((await page.evaluate(()=>window.mockRpc.find(x=>x.name==='aaw_set_worker_rate'))).args.p_monthly,10000);
+ await page.locator('[data-section=daily]').click();await page.selectOption('[name=worker_id]','w1');await page.selectOption('[name=eligible]','false');await page.locator('#operationForm button[type=submit]').click();await page.waitForFunction(()=>window.mockMutations.length>0);let calls=await page.evaluate(()=>window.mockMutations);assert.equal(calls[0].args[0].eligible,false);assert.equal(calls[0].args[0].site_id,'demo-site');
+ await page.locator('[data-section=ledger]').click();await page.fill('[name=amount]','250');await page.locator('#operationForm button[type=submit]').click();await page.waitForFunction(()=>window.mockMutations.some(x=>x.table==='site_cash_ledger'));calls=await page.evaluate(()=>window.mockMutations);const cash=calls.find(x=>x.table==='site_cash_ledger');assert.equal(cash.args[0].incharge_id,'demo-user');assert.equal(cash.args[0].amount,250);assert.equal(cash.args[0].is_archived,false);
+ }finally{await context.close()}
+});
+test('Food preview stays visible and only deliberate Master confirmation finalizes',async()=>{
+ const {page,context,errors}=await openPage('/portal/operations.html?role=master&section=settlement',{operational:true,demoWorkers:[{id:'w1',full_name:'Worker One'}]});
+ try{await page.locator('#operationForm').waitFor();await page.locator('#operationForm button[type=submit]').click();await page.locator('#finalize').waitFor();assert.match(await page.locator('#report').innerText(),/Worker One/);assert.equal(await page.evaluate(()=>window.mockRpc.filter(x=>x.name==='finalize_food_settlement').length),0);page.once('dialog',dialog=>dialog.accept());await page.locator('#finalize').click();await page.waitForFunction(()=>window.mockRpc.some(x=>x.name==='finalize_food_settlement'));assert.deepEqual(errors,[])}finally{await context.close()}
+});
+test('Master financial report remains visible after generation and supports Hindi controls',async()=>{
+ const {page,context,errors}=await openPage('/portal/operations.html?role=master&section=financials',{operational:true});
+ try{await page.locator('#operationForm').waitFor();await page.locator('#operationForm button[type=submit]').click();await page.locator('#exportFinancial').waitFor();assert.match(await page.locator('#report').innerText(),/Receivables/);await page.selectOption('#language','hi');await page.locator('#operationForm button[type=submit]').filter({hasText:'रिपोर्ट बनाएँ'}).waitFor();assert.deepEqual(errors,[])}finally{await context.close()}
+});
+test('Expense Edit updates the existing entry rather than inserting a duplicate',async()=>{
+ const {page,context}=await openPage('/portal/index.html?role=incharge',{role:'incharge',sessionKey:'aaw-portal-auth-incharge',operational:true,demoRows:{site_expenses:[{id:'expense1',site_id:'demo-site',expense_date:'2026-10-01',category:'Tools',amount:100,description:'Receipt 1'}]}});
+ try{await page.locator('#app').waitFor({state:'visible'});await page.locator('[data-tab=expenses]').click();await page.locator('[data-edit=expense1]').click();await page.fill('[name=amount]','125');await page.locator('#save').click();await page.waitForFunction(()=>window.mockMutations.length>0);const change=(await page.evaluate(()=>window.mockMutations))[0];assert.equal(change.method,'update');assert.equal(change.table,'site_expenses');assert.equal(change.args[0].amount,125);assert.equal(change.args[0].site_id,'demo-site')}finally{await context.close()}
 });
