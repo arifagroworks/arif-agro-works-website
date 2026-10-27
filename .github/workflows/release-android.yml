@@ -1,5 +1,10 @@
 name: AAW Android Release
 on:
+  push:
+    branches: [main]
+    paths:
+      - android-app/app/build.gradle
+      - .github/workflows/release-android.yml
   workflow_dispatch:
     inputs:
       publish:
@@ -12,11 +17,44 @@ concurrency:
   group: aaw-release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  configuration:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.signing.outputs.configured }}
+      release_needed: ${{ steps.plan.outputs.release_needed }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check owner configuration without exposing secret values
+        id: signing
+        env:
+          AAW_RELEASE_KEYSTORE_BASE64: ${{ secrets.AAW_RELEASE_KEYSTORE_BASE64 }}
+          AAW_RELEASE_STORE_PASSWORD: ${{ secrets.AAW_RELEASE_STORE_PASSWORD }}
+          AAW_RELEASE_KEY_ALIAS: ${{ secrets.AAW_RELEASE_KEY_ALIAS }}
+          AAW_RELEASE_KEY_PASSWORD: ${{ secrets.AAW_RELEASE_KEY_PASSWORD }}
+        run: python3 docs/tools/check-owner-signing.py
+      - name: Read published Android release versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/aaw-releases.json"
+      - name: Plan release and reject version downgrades
+        id: plan
+        run: python3 docs/tools/plan-android-release.py --releases "$RUNNER_TEMP/aaw-releases.json" --output "$GITHUB_OUTPUT"
+      - name: Verify installed-app update compatibility against the last release
+        if: steps.plan.outputs.release_needed == 'true' && steps.plan.outputs.previous_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_TAG: ${{ steps.plan.outputs.previous_tag }}
+        run: |
+          gh release download "$PREVIOUS_TAG" --pattern android-release.json --dir "$RUNNER_TEMP/aaw-previous-release"
+          python3 docs/tools/plan-android-release.py --releases "$RUNNER_TEMP/aaw-releases.json" --previous-metadata "$RUNNER_TEMP/aaw-previous-release/android-release.json"
   verify:
+    needs: configuration
+    if: needs.configuration.outputs.configured == 'true' && needs.configuration.outputs.release_needed == 'true'
     uses: ./.github/workflows/build-apk.yml
   release:
     if: github.ref == 'refs/heads/main'
-    needs: verify
+    needs: [configuration, verify]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -70,6 +108,12 @@ jobs:
           actual=re.search(r'Signer #1 certificate SHA-256 digest: ([a-fA-F0-9]+)',Path('release-output/signing-certificate.txt').read_text()).group(1).lower()
           if actual!=expected:raise SystemExit('Release signer differs from the owner certificate')
           version=re.search(r"versionName '([^']+)'",Path('android-app/app/build.gradle').read_text()).group(1)
+          code=int(re.search(r'versionCode\s+(\d+)',Path('android-app/app/build.gradle').read_text()).group(1))
+          package=Path('release-output/package-info.txt').read_text()
+          if not re.search(r"package: name='com\.arifagroworks\.combined' versionCode='"+str(code)+r"' versionName='"+re.escape(version)+"'",package):raise SystemExit('Compiled package identity/version differs from the release source')
+          import hashlib,os
+          metadata={'package_name':'com.arifagroworks.combined','version_name':version,'version_code':code,'certificate_sha256':actual,'source_commit':os.environ['GITHUB_SHA'],'apk_sha256':hashlib.sha256(Path('release-output/AAW-Release.apk').read_bytes()).hexdigest(),'aab_sha256':hashlib.sha256(Path('release-output/AAW-Release.aab').read_bytes()).hexdigest()}
+          Path('release-output/android-release.json').write_text(json.dumps(metadata,indent=2)+'\n')
           Path('release-output/version.txt').write_text(version+'\n')
           PY
           cd release-output
@@ -80,12 +124,12 @@ jobs:
           name: AAW-Signed-Release
           path: release-output/
       - name: Publish versioned APK and stable latest download
-        if: inputs.publish
+        if: github.event_name == 'push' || inputs.publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(cat release-output/version.txt)
-          gh release create "android-v${VERSION}" release-output/AAW-Release.apk release-output/AAW-Release.aab release-output/SHA256SUMS.txt --title "AAW Android ${VERSION}" --notes "Verified owner-signed Android release. Back up local drafts before switching from a debug APK. Website and portal data remain online."
+          gh release create "android-v${VERSION}" release-output/AAW-Release.apk release-output/AAW-Release.aab release-output/SHA256SUMS.txt release-output/android-release.json --target "$GITHUB_SHA" --title "AAW Android ${VERSION}" --notes "Verified owner-signed Android release. Back up local drafts before switching from a debug APK. Website and portal data remain online."
       - name: Remove temporary private key
         if: always()
         run: if [ -n "${AAW_KEYSTORE_PATH:-}" ]; then rm -f "$AAW_KEYSTORE_PATH"; fi

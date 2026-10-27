@@ -1,3 +1,5 @@
+> **Postponed by owner — 28 October 2026:** Full AI, voice and bill-photo reading are deferred. No paid AI service or provider key should be activated. Existing public FAQ and Master guided commands remain available.
+
 # Two AAW assistants: proposed behavior and rollout
 
 ## Implemented first stage

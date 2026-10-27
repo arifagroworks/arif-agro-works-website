@@ -2,5 +2,7 @@
   "key_alias": "aaw-release-v1",
   "certificate_sha256": "1c565aaddc16d4d966d11a2633f11c9af69c54fada5f27ecce9ccf30c69cf531",
   "algorithm": "RSA-3072/SHA256withRSA",
-  "private_material": "Owner backup and GitHub Actions secrets only; never committed."
+  "private_material": "Owner backup and GitHub Actions secrets only; never committed.",
+  "baseline_version_code": 5,
+  "baseline_version_name": "1.4"
 }
