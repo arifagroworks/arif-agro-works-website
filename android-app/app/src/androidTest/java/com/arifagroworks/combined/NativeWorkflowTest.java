@@ -3,6 +3,8 @@ package com.arifagroworks.combined;
 import android.content.Intent;
 import android.os.SystemClock;
 import android.webkit.WebView;
+import org.json.JSONArray;
+import android.view.WindowInsets;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.rule.ActivityTestRule;
 import androidx.test.uiautomator.By;
@@ -54,6 +56,22 @@ public class NativeWorkflowTest {
         for(int i=0;i<100;i++){ if("true".equals(js("!!window.AAWNativeSupport&&document.readyState==='complete'&&document.body?.dataset.fixture==='"+fixture+"'"))){ready=true;break;}SystemClock.sleep(100); }
         assertTrue("Origin-scoped native bridge installed on the complete HTTPS fixture",ready);
     }
+    private void tap(String selector) throws Exception {
+        js("document.querySelector('"+selector+"').scrollIntoView({block:'center'})");
+        CountDownLatch painted=new CountDownLatch(1);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> activity.testWebView().postVisualStateCallback(1,new WebView.VisualStateCallback(){@Override public void onComplete(long id){painted.countDown();}}));
+        assertTrue("Fixture painted",painted.await(10,TimeUnit.SECONDS));
+        JSONArray box=new JSONArray(js("(()=>{const r=document.querySelector('"+selector+"').getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2,innerWidth]})()"));
+        int[] position=new int[3];
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {activity.testWebView().getLocationOnScreen(position);position[2]=activity.testWebView().getWidth();});
+        double scale=position[2]/box.getDouble(2);
+        assertTrue("Tap actual rendered control",device.click(position[0]+(int)(box.getDouble(0)*scale),position[1]+(int)(box.getDouble(1)*scale)));
+    }
+    private boolean keyboardVisible() {
+        AtomicReference<Boolean> visible=new AtomicReference<>(false);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {WindowInsets insets=activity.testWebView().getRootWindowInsets();visible.set(insets!=null&&insets.isVisible(WindowInsets.Type.ime()));});
+        return visible.get();
+    }
     private UiObject2 findText(String text) { return device.wait(Until.findObject(By.text(text)), 15000); }
     private void savePicker() throws Exception {
         UiObject2 save=device.wait(Until.findObject(By.res("com.android.documentsui","action_menu_save")),15000);
@@ -62,7 +80,7 @@ public class NativeWorkflowTest {
     }
     @Test public void csvExportUsesSystemPickerAndPreservesBytes() throws Exception {
         page("csv");
-        UiObject2 button=findText("Export CSV");assertNotNull(button);button.click();savePicker();
+        tap("button");savePicker();
         for(int i=0;i<100&&activity.lastSavedUri==null;i++)SystemClock.sleep(100);
         assertNotNull("Saved URI returned",activity.lastSavedUri);
         try(InputStream in=activity.getContentResolver().openInputStream(activity.lastSavedUri)){
@@ -72,15 +90,14 @@ public class NativeWorkflowTest {
     }
     @Test public void importFilePickerCanBeOpenedAndCanceled() throws Exception {
         page("import");
-        UiObject2 input=device.wait(Until.findObject(By.clazz("android.widget.Button")),15000);
-        if(input==null)input=findText("Choose File");assertNotNull("File input",input);input.click();
+        tap("input");
         assertTrue("Android Files picker",device.wait(Until.hasObject(By.pkg("com.android.documentsui")),15000));
         device.pressBack();SystemClock.sleep(500);assertFalse(activity.isFinishing());
         assertEquals("true",js("!!document.querySelector('input[type=file]')"));
     }
     @Test public void nativePrintSavesARealPdf() throws Exception {
         page("print");
-        UiObject2 button=findText("Print Test PDF");assertNotNull(button);button.click();
+        tap("button");
         UiObject2 print=device.wait(Until.findObject(By.res("com.android.printspooler","print_button")),20000);
         assertNotNull("System PDF print preview",print);for(int i=0;i<100&&!print.isEnabled();i++)SystemClock.sleep(100);assertTrue("Print button enabled",print.isEnabled());print.click();savePicker();SystemClock.sleep(2000);
         String listing=device.executeShellCommand("find /sdcard/Download -name '*.pdf' -type f");
@@ -88,9 +105,12 @@ public class NativeWorkflowTest {
     }
     @Test public void backNavigationAndKeyboardKeepTheAppUsable() throws Exception {
         page("navigation");
-        UiObject2 input=device.wait(Until.findObject(By.clazz("android.widget.EditText")),15000);assertNotNull(input);input.click();input.setText("Synthetic Name");device.pressBack();
+        tap("#name");
+        for(int i=0;i<100&&!keyboardVisible();i++)SystemClock.sleep(100);
+        assertTrue("Real Android keyboard visible",keyboardVisible());
+        device.executeShellCommand("input text Synthetic%sName");device.pressBack();
         assertEquals("\"Synthetic Name\"",js("document.getElementById('name').value"));
-        findText("Next screen").click();assertEquals("\"#second\"",js("location.hash"));device.pressBack();SystemClock.sleep(300);
+        tap("button");assertEquals("\"#second\"",js("location.hash"));device.pressBack();SystemClock.sleep(300);
         assertFalse(activity.isFinishing());assertEquals("\"\"",js("location.hash"));
     }
 }
