@@ -130,6 +130,15 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/aaw-ci-test-only.jks"
 
+      - name: Upload CI release verification inputs (not a production release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: AAW-CI-Release-Verification-NOT-FOR-INSTALL
+          path: |
+            android-app/app/build/outputs/apk/release/app-release.apk
+            android-app/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
