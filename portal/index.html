@@ -159,6 +159,9 @@ const tabs=[
 ['production','Daily Production'],
 ['billing','Company Documents'],
 ['ledger','Cash Ledger'],
+['operations','Salary & Food Operations'],
+['financials','Income & Expenses'],
+['audit','History'],
 ['mastertools','Master Tools']
 ];
 const config={
@@ -254,7 +257,7 @@ function field(f){
 let [k,name,type,req]=f,v='';
 if(type==='worker')
 v='<select name="'+k+'" required><option value="">Select Worker</option>'+
-workers.filter(w=>!w.is_deleted&&w.is_active!==false)
+workers.filter(w=>!w.is_deleted)
 .map(w=>`<option value="${esc(w.id)}">${esc(w.full_name)}</option>`).join('')+'</select>';
 else if(type==='cash')
 v='<select name="'+k+'"><option value="cash_in">Cash In</option><option value="cash_out">Cash Out</option></select>';
@@ -272,8 +275,8 @@ function masterTools(){
     ['Incharge Management','incharge-test-fixed.html','Create incharge accounts and reset passwords'],
     ['Site Assignment','site-assignment-test.html','Assign or change the site allocated to an incharge'],
     ['Incharge Access Control','incharge-access-test.html','Disable, enable and manage incharge login access'],
-    ['Food Management','food-v518-fixed.html','Active workers only for new food entries; historical records preserved'],
-    ['Salary Reconciliation','salary-test.html','Review calculations without creating salary payments'],
+    ['Salary & Food Operations','operations.html','Effective salary rates, daily Food attendance, consumption periods and transfers'],
+    
     ['Salary Guard Check','v519-guard-check.html','Run authenticated Master Admin guard diagnostic; no payment is retained']
   ];
   $('content').innerHTML='<h2>Master Admin Tools</h2><p class="muted">Manage accounts, assignments and site records. Each tool checks your Master Admin access.</p>'+
@@ -322,10 +325,14 @@ function dashboard(site,allowed){
  $('content').querySelectorAll('[data-open]').forEach(button=>button.onclick=()=>{tab=button.dataset.open;edit=null;deleted=false;render()});
 }
 
+function operationsPanel(site,section){
+ const url='operations.html?role='+encodeURIComponent(expectedRole||'direct')+'&site_id='+encodeURIComponent(site)+'&section='+encodeURIComponent(section);
+ $('content').innerHTML=`<h2>Site Operations</h2><div class="actions"><a class="badge" href="${url}" target="_blank" rel="noopener noreferrer">Open Full Screen ↗</a></div><iframe title="Secure site operations" src="${url}" style="width:100%;height:85vh;min-height:700px;border:1px solid #dddcc7;border-radius:12px"></iframe>`;
+}
 async function render(){
 let n=++seq,site=$('site').value;
 if(!site){$('content').textContent='No assigned sites';return}
-let allowed=tabs.filter(x=>role==='master'||!['summary','slip','ledger','mastertools','billing'].includes(x[0]));
+let allowed=tabs.filter(x=>role==='master'||!['summary','slip','financials','mastertools','billing'].includes(x[0]));
 if(!allowed.some(x=>x[0]===tab))tab='dashboard';
 $('tabs').innerHTML=allowed.map(x=>`<button data-tab="${x[0]}" class="${tab===x[0]?'active':''}" aria-current="${tab===x[0]?'page':'false'}"><span aria-hidden="true" class="aaw-menu-icon">${menuIcons[x[0]]||'▦'}</span><span>${x[1]}</span></button>`).join('');
 $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
@@ -341,7 +348,11 @@ if(tab==='attendance')return attendance(site);
 if(tab==='report')return monthlyReport(site);
 if(tab==='slip')return salarySlip(site);
 if(tab==='food')return foodDeduction(site);
-if(tab==='foodmanage')return foodManagement(site);
+if(tab==='foodmanage')return operationsPanel(site,'settlement');
+if(tab==='ledger')return operationsPanel(site,'ledger');
+if(tab==='operations')return operationsPanel(site,'rates');
+if(tab==='financials')return operationsPanel(site,'financials');
+if(tab==='audit')return operationsPanel(site,'audit');
 if(tab==='salary')return salaryPayment(site);
 if(tab==='mastertools')return masterTools();
 if(tab==='production')return productionPanel(site);
@@ -355,12 +366,12 @@ let rows=(r.data||[]).filter(x=>tab!=='workers'||(deleted?x.is_deleted===true:x.
 let can=role==='master'||['workers','advances','expenses'].includes(tab);
 $('content').innerHTML=`<h2>${allowed.find(x=>x[0]===tab)[1]}</h2>
 ${tab==='workers'&&role==='master'?`<button id="showDeleted" class="alt">${deleted?'Show Workers':'Deleted Workers / Restore'}</button>`:''}
-<div id="rows"></div><h3 id="formTitle">New Entry</h3><form id="form" class="grid"></form>`;
+${tab==='workers'?'<p class="muted">For monthly salary or effective-date rate changes, open Salary &amp; Food Operations → Salary Rates. Existing worker rate fields are read-only here.</p>':''}<div id="rows"></div><h3 id="formTitle">New Entry</h3><form id="form" class="grid"></form>`;
 if($('showDeleted'))$('showDeleted').onclick=()=>{deleted=!deleted;edit=null;render()};
 $('rows').innerHTML=rows.length?rows.map(x=>{
 let name=x.full_name||workers.find(w=>String(w.id)===String(x.worker_id))?.full_name||x.category||x.entry_type||'Entry';
 let detail=Object.entries(x).filter(([k,v])=>!['id','site_id','worker_id','created_at'].includes(k)&&v!==null).map(([k,v])=>k+': '+v).join(' · ');
-let buttons='';
+let buttons=can?`<button class="alt" data-edit="${esc(x.id)}">Edit</button>`:'';
 if(tab==='workers')
 buttons=x.is_deleted
 ?(role==='master'?`<button data-restore="${esc(x.id)}">Restore</button>`:'')
@@ -379,10 +390,10 @@ let data={site_id:site};
 fields.forEach(([k,,type])=>{
 let v=form.elements[k].value;
 if(v!=='')data[k]=type==='number'?Number(v):v;
-else if(edit&&tab==='workers')data[k]=null;
+else if(edit)data[k]=null;
 });
 try{
-let q=edit&&tab==='workers'
+let q=edit
 ?db.from(table).update(data).eq('id',edit).eq('site_id',site).select('id')
 :db.from(table).insert(data).select('id');
 let r=await q;
@@ -392,14 +403,14 @@ edit=null;await render();notice('Saved successfully');
 }catch(e){notice('Save Error: '+e.message);$('save').disabled=false}
 };
 }
-if(tab!=='workers')return;
 $('rows').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{
 let x=rows.find(r=>String(r.id)===b.dataset.edit);edit=x.id;
-fields.forEach(([k])=>{if(form.elements[k])form.elements[k].value=x[k]??''});
-$('formTitle').textContent='Edit '+x.full_name;
-$('save').textContent='Update Worker';
+fields.forEach(([k])=>{if(form.elements[k]){form.elements[k].value=x[k]??'';if(tab==='workers'&&['daily_wage','overtime_rate'].includes(k))form.elements[k].readOnly=true;}});
+$('formTitle').textContent='Edit '+(x.full_name||x.category||'Entry');
+$('save').textContent='Update Entry';
 form.scrollIntoView({behavior:'smooth'});
 });
+if(tab!=='workers')return;
 $('rows').querySelectorAll('[data-active]').forEach(b=>b.onclick=async()=>{
 let x=rows.find(r=>String(r.id)===b.dataset.active),active=x.is_active===false;
 if(!confirm((active?'Reactivate ':'Deactivate ')+x.full_name+'?'))return;
@@ -429,16 +440,17 @@ throw Error('Salary record limit reached; use an independently verified reconcil
 }
 async function salaryData(site,from,to,id='all',cumulative=false){
 if(!from||!to||from>to)throw Error('Invalid salary dates');
-let a=db.from('worker_attendance').select('worker_id,status,overtime_hours').eq('site_id',site).gte('attendance_date',from).lte('attendance_date',to);
+let a=db.from('worker_attendance').select('worker_id,attendance_date,status,overtime_hours').eq('site_id',site).gte('attendance_date',from).lte('attendance_date',to);
 let b=db.from('worker_advances').select('worker_id,amount,notes').eq('site_id',site).gte('advance_date',from).lte('advance_date',to);
 let c=db.from('worker_salary_payments').select('worker_id,amount').eq('site_id',site);
 c=cumulative?c.lte('payment_date',to):c.lte('period_start',to).gte('period_end',from);
 if(id!=='all'){a=a.eq('worker_id',id);b=b.eq('worker_id',id);c=c.eq('worker_id',id)}
 const r=await Promise.all([
  allSalaryRows(a.order('id')),allSalaryRows(b.order('id')),allSalaryRows(c.order('id')),
- allSalaryRows(db.rpc('get_final_food_deductions',{p_site_id:site,p_start:from,p_end:to}).order('worker_id'))
+ allSalaryRows(db.rpc('get_final_food_deductions',{p_site_id:site,p_start:from,p_end:to}).order('worker_id')),
+ allSalaryRows(db.from('worker_salary_rates').select('*').eq('site_id',site).lte('effective_from',to).order('id'))
 ]);
-return {attendance:r[0],advances:r[1],payments:r[2],finalFood:r[3]};
+return {attendance:r[0],advances:r[1],payments:r[2],finalFood:r[3],rates:r[4]};
 }
 // The payment guard uses all earnings/deductions through the cutoff, not just this month.
 async function salaryCutoffData(site,to,id){return salaryData(site,'0001-01-01',to,id,true)}
@@ -448,17 +460,19 @@ let att=data.attendance.filter(match),adv=data.advances.filter(match),pay=data.p
 let final=(data.finalFood||[]).filter(match);
 let days=att.reduce((n,x)=>n+(x.status==='present'?1:x.status==='half_day'?0.5:0),0);
 let ot=att.reduce((n,x)=>n+Number(x.overtime_hours||0),0);
-let wage=days*Number(w.daily_wage||0),otPay=ot*Number(w.overtime_rate||0);
+const rates=(data.rates||[]).filter(match).sort((a,b)=>b.effective_from.localeCompare(a.effective_from));
+let wage=0,otPay=0;
+for(const row of att){const rate=rates.find(r=>r.effective_from<=(row.attendance_date||'0001-01-01'));const basis=rate?.salary_basis||w.salary_basis;const daily=basis==='monthly'?Number(rate?.monthly_salary??w.monthly_salary??0)/30:Number(rate?.daily_rate??w.daily_wage??0);const overtime=Number(rate?.overtime_hourly_rate??w.overtime_rate??0);wage+=(row.status==='present'?1:row.status==='half_day'?.5:0)*daily;otPay+=Number(row.overtime_hours||0)*overtime;}
 let isFood=x=>String(x.notes||'').trim().toUpperCase().startsWith('FOOD:');
 let manualFood=adv.filter(isFood).reduce((n,x)=>n+Number(x.amount||0),0);
 let advance=adv.filter(x=>!isFood(x)).reduce((n,x)=>n+Number(x.amount||0),0);
 let finalFood=final.reduce((n,x)=>n+Number(x.deduction_amount||0),0);
 let paid=pay.reduce((n,x)=>n+Number(x.amount||0),0);
-let gross=wage+otPay,food=manualFood+finalFood,due=gross-advance-food-paid;
+let gross=Math.round((wage+otPay+Number.EPSILON)*100)/100,food=manualFood+finalFood,due=Math.round((gross-advance-food-paid+Number.EPSILON)*100)/100;
 return {days,ot,wage,otPay,manualFood,finalFood,food,advance,paid,gross,due};
 }
 async function fullWorkers(site){
-let r=await db.from('workers').select('id,full_name,daily_wage,overtime_rate,is_deleted,is_active').eq('site_id',site).order('full_name');
+let r=await db.from('workers').select('id,full_name,daily_wage,overtime_rate,salary_basis,monthly_salary,is_deleted,is_active').eq('site_id',site).order('full_name');
 if(r.error)throw r.error;
 return r.data||[];
 }
@@ -782,7 +796,7 @@ $('content').innerHTML=`<h2>Salary Payments · Balance & Payment Register</h2>
 <label>Notes<input id="pn" type="text" placeholder="Payment reference / remarks"></label>
 <div class="actions"><button id="ps" disabled>Calculate Before Saving</button><button class="alt" id="pr">Refresh History</button></div>
 <div id="ph"></div>`;
-let list=await fullWorkers(site);list=list.filter(x=>!x.is_deleted&&x.is_active!==false);
+let list=await fullWorkers(site);list=list.filter(x=>!x.is_deleted);
 $('pw').innerHTML=workerOptions(list);
 let verified=null;
 let savingSalary=false;
@@ -799,7 +813,7 @@ $('ph').innerHTML='<h3>Previous Salary Payments</h3>'+((r.data||[]).map(x=>
 const calculate=async()=>{
 const worker=$('pw').value,from=$('pf').value,to=$('pt').value;
 if(!worker||!from||!to||from>to)throw Error('Select a worker and valid period');
-const w=list.find(x=>String(x.id)===worker);if(!w)throw Error('Worker not active');
+const w=list.find(x=>String(x.id)===worker);if(!w)throw Error('Worker not found');
 const data=await salaryCutoffData(site,to,worker),x=calculateWorker(w,data);
 const due=Math.round(x.due*100)/100;
 verified={worker,from,to,due};

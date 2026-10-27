@@ -257,11 +257,11 @@ $('calculateBtn').onclick = async () => {
     $('result').innerHTML = '';
     $('warnings').textContent = 'Checking...';
 
-    const [workers,attendance,advances,payments,settlements] =
+    const [workers,attendance,advances,payments,settlements,rates] =
       await Promise.all([
         getAll(
           'workers',
-          'id,full_name,daily_wage,overtime_rate',
+          'id,full_name,daily_wage,overtime_rate,salary_basis,monthly_salary',
           site
         ),
         getAll(
@@ -292,7 +292,8 @@ $('calculateBtn').onclick = async () => {
           q => q.eq('status','final')
                 .lte('period_start',to)
                 .gte('period_end',from)
-        )
+        ),
+        getAll('worker_salary_rates','*',site,q=>q.lte('effective_from',to))
       ]);
 
     const warnings = [];
@@ -340,6 +341,7 @@ $('calculateBtn').onclick = async () => {
       workerMap.set(w.id,{
         worker:w,
         days:0,
+        gross:0,
         ot:0,
         advance:0,
         manualFood:0,
@@ -355,6 +357,10 @@ $('calculateBtn').onclick = async () => {
       else if(a.status === 'half_day') w.days += 0.5;
 
       w.ot += num(a.overtime_hours);
+      const rate=rates.filter(r=>r.worker_id===a.worker_id&&r.effective_from<=a.attendance_date).sort((a,b)=>b.effective_from.localeCompare(a.effective_from))[0];
+      const basis=rate?.salary_basis||w.worker.salary_basis;
+      const daily=basis==='monthly'?num(rate?.monthly_salary??w.worker.monthly_salary)/30:num(rate?.daily_rate??w.worker.daily_wage);
+      w.gross+=(a.status==='present'?1:a.status==='half_day'?.5:0)*daily+num(a.overtime_hours)*num(rate?.overtime_hourly_rate??w.worker.overtime_rate);
     });
 
     advances.forEach(a => {
@@ -383,9 +389,7 @@ $('calculateBtn').onclick = async () => {
     for(const [id,w] of workerMap) {
       const finalFood = finalFoodMap.get(id) || 0;
 
-      const gross =
-        w.days * num(w.worker.daily_wage) +
-        w.ot * num(w.worker.overtime_rate);
+      const gross = Math.round((w.gross+Number.EPSILON)*100)/100;
 
       const conflict =
         finalFood > 0 && w.manualFood > 0;

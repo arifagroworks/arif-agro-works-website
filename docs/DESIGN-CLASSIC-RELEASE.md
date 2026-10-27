@@ -9,3 +9,5 @@ Document print templates and payroll/food arithmetic are preserved. This visual 
 Validation: 72 isolated automated checks pass, including 15 database permission/calculation tests and responsive browser checks for both portal roles. Visual inspection covers 360px and desktop public/portal views. Native APK is compiled and its packaged logo, splash resource, app identity and version checked in GitHub Actions. Real-device installation and an authenticated live business transaction have not been performed in this environment.
 
 The Actions cache preserves the debug signing key for future 1.3+ workflow builds. Older APKs built with a different debug key may require uninstalling before installation; owner-managed release signing remains separate.
+
+Follow-up: the operations proposal has since passed feature tests and been deployed as migration 20261027143748. See [Operations release](OPERATIONS-RELEASE.md) for current status.
