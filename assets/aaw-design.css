@@ -27,3 +27,5 @@ body.aaw-public,body.aaw-portal{background:var(--aaw-cream)!important;background
 @media(max-width:350px){.aaw-public .brand{gap:7px}.aaw-public .logomark{width:49px;flex-basis:49px}.aaw-public .brandname strong{font-size:20px!important}}
 }
 @media screen{.aaw-public .aaw-lang-btn,.aaw-public .btn{font-family:Arial,'AAW Hindi',sans-serif!important}@media(max-width:680px){.aaw-public .brandname small{font-size:8px!important;letter-spacing:.1px}}}
+
+.aaw-page-language{font-family:Arial,'AAW Hindi',sans-serif;flex-shrink:0;align-items:center}.aaw-page-language button{font-family:Arial,'AAW Hindi',sans-serif!important;min-width:38px}.aaw-portal main>.aaw-page-language{margin:0 0 14px auto;width:max-content;color:#30391f}.aaw-portal header .aaw-page-language{color:#fffdf5}@media print{.aaw-page-language{display:none!important}}

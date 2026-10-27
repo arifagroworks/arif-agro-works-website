@@ -1,0 +1,91 @@
+name: AAW Android Release
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified signed APK as a GitHub Release
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: aaw-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    uses: ./.github/workflows/build-apk.yml
+  release:
+    if: github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      AAW_RELEASE_KEYSTORE_BASE64: ${{ secrets.AAW_RELEASE_KEYSTORE_BASE64 }}
+      AAW_RELEASE_STORE_PASSWORD: ${{ secrets.AAW_RELEASE_STORE_PASSWORD }}
+      AAW_RELEASE_KEY_ALIAS: ${{ secrets.AAW_RELEASE_KEY_ALIAS }}
+      AAW_RELEASE_KEY_PASSWORD: ${{ secrets.AAW_RELEASE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Validate owner signing secrets
+        shell: bash
+        run: |
+          AAW_KEYSTORE_PATH="$RUNNER_TEMP/aaw-release.jks"
+          echo "AAW_KEYSTORE_PATH=$AAW_KEYSTORE_PATH" >> "$GITHUB_ENV"
+          for name in AAW_RELEASE_KEYSTORE_BASE64 AAW_RELEASE_STORE_PASSWORD AAW_RELEASE_KEY_ALIAS AAW_RELEASE_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then echo "Missing owner secret: $name"; exit 1; fi
+          done
+          umask 077
+          printf '%s' "$AAW_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$AAW_KEYSTORE_PATH"
+      - name: Install SDK build tools
+        run: |
+          yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --install 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build owner-signed APK and app bundle
+        working-directory: android-app
+        run: gradle --no-daemon assembleRelease bundleRelease
+      - name: Verify permanent signer and package update files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release-output
+          cp android-app/app/build/outputs/apk/release/app-release.apk release-output/AAW-Release.apk
+          cp android-app/app/build/outputs/bundle/release/app-release.aab release-output/AAW-Release.aab
+          "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose --print-certs release-output/AAW-Release.apk > release-output/signing-certificate.txt
+          "${ANDROID_HOME}/build-tools/35.0.0/aapt" dump badging release-output/AAW-Release.apk > release-output/package-info.txt
+          if grep -q application-debuggable release-output/package-info.txt; then echo 'Release must not be debuggable'; exit 1; fi
+          unzip -Z -1 release-output/AAW-Release.apk > "$RUNNER_TEMP/release-entries.txt"
+          if grep -q assets/native-fixture- "$RUNNER_TEMP/release-entries.txt"; then echo 'Debug fixtures leaked into release'; exit 1; fi
+          python3 - <<'PY'
+          import json,re
+          from pathlib import Path
+          expected=json.loads(Path('android-app/release-signing.json').read_text())['certificate_sha256'].lower()
+          actual=re.search(r'Signer #1 certificate SHA-256 digest: ([a-fA-F0-9]+)',Path('release-output/signing-certificate.txt').read_text()).group(1).lower()
+          if actual!=expected:raise SystemExit('Release signer differs from the owner certificate')
+          version=re.search(r"versionName '([^']+)'",Path('android-app/app/build.gradle').read_text()).group(1)
+          Path('release-output/version.txt').write_text(version+'\n')
+          PY
+          cd release-output
+          sha256sum AAW-Release.apk AAW-Release.aab > SHA256SUMS.txt
+      - name: Upload signed release deliverables
+        uses: actions/upload-artifact@v4
+        with:
+          name: AAW-Signed-Release
+          path: release-output/
+      - name: Publish versioned APK and stable latest download
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(cat release-output/version.txt)
+          gh release create "android-v${VERSION}" release-output/AAW-Release.apk release-output/AAW-Release.aab release-output/SHA256SUMS.txt --title "AAW Android ${VERSION}" --notes "Verified owner-signed Android release. Back up local drafts before switching from a debug APK. Website and portal data remain online."
+      - name: Remove temporary private key
+        if: always()
+        run: if [ -n "${AAW_KEYSTORE_PATH:-}" ]; then rm -f "$AAW_KEYSTORE_PATH"; fi

@@ -1,6 +1,7 @@
 name: Build ARIF AGRO WORKS APK
 
 on:
+  workflow_call:
   workflow_dispatch:
   pull_request:
   push:
@@ -24,7 +25,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Prepare pinned Chromium runtime
+        run: node docs/tools/prepare-test-browser.cjs
       - name: Run isolated browser and calculation regressions
         run: npm test
 
@@ -97,8 +99,45 @@ jobs:
           "$AAPT" dump resources "$APK" > apk-resources.txt
           ICON_ID=$(python3 -c 'import re; s=open("apk-resources.txt").read(); print(re.search(r"resource (0x[0-9a-f]+) [^\n]*:drawable/aaw_logo:", s).group(1))')
           grep -q "android:src.*@$ICON_ID" apk-splash.txt
-          "$AAPT" dump badging "$APK" | grep "versionName='1.3'"
+          "$AAPT" dump badging "$APK" | grep "versionName='1.4'"
           ls -lh "$APK"
+
+      - name: Verify release fails without owner signing configuration
+        shell: bash
+        run: |
+          if env -u AAW_KEYSTORE_PATH -u AAW_RELEASE_STORE_PASSWORD -u AAW_RELEASE_KEY_ALIAS -u AAW_RELEASE_KEY_PASSWORD gradle --no-daemon -p android-app assembleRelease > "$RUNNER_TEMP/unsigned-release-check.log" 2>&1; then
+            echo 'Release unexpectedly built without signing configuration'; exit 1
+          fi
+          grep -q 'Release signing is not configured' "$RUNNER_TEMP/unsigned-release-check.log"
+      - name: Compile release APK and bundle with an ephemeral CI-only test key
+        env:
+          AAW_RELEASE_STORE_PASSWORD: AAW-TEST-ONLY-NOT-PRODUCTION
+          AAW_RELEASE_KEY_PASSWORD: AAW-TEST-ONLY-NOT-PRODUCTION
+          AAW_RELEASE_KEY_ALIAS: ci-test-only
+        shell: bash
+        run: |
+          export AAW_KEYSTORE_PATH="$RUNNER_TEMP/aaw-ci-test-only.jks"
+          keytool -genkeypair -keystore "$AAW_KEYSTORE_PATH" -storetype JKS -alias "$AAW_RELEASE_KEY_ALIAS" -storepass:env AAW_RELEASE_STORE_PASSWORD -keypass:env AAW_RELEASE_KEY_PASSWORD -keyalg RSA -keysize 2048 -validity 2 -dname 'CN=AAW CI TEST ONLY' -noprompt
+          gradle --no-daemon -p android-app assembleRelease bundleRelease
+          APK=android-app/app/build/outputs/apk/release/app-release.apk
+          "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "${ANDROID_HOME}/build-tools/35.0.0/aapt" dump badging "$APK" > "$RUNNER_TEMP/release-badging.txt"
+          if grep -q application-debuggable "$RUNNER_TEMP/release-badging.txt"; then echo 'Release is debuggable'; exit 1; fi
+          unzip -Z -1 "$APK" > "$RUNNER_TEMP/release-entries.txt"
+          if grep -q assets/native-fixture- "$RUNNER_TEMP/release-entries.txt"; then echo 'Debug fixtures leaked into release'; exit 1; fi
+          test -s android-app/app/build/outputs/bundle/release/app-release.aab
+      - name: Remove ephemeral test signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/aaw-ci-test-only.jks"
+
+      - name: Upload CI release verification inputs (not a production release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: AAW-CI-Release-Verification-NOT-FOR-INSTALL
+          path: |
+            android-app/app/build/outputs/apk/release/app-release.apk
+            android-app/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -106,3 +145,52 @@ jobs:
           name: AAW-Combined-APK
           path: android-app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  android-smoke:
+    needs: regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test native save, import, print, keyboard and back on Android 15
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          disable-animations: true
+          script: |
+            adb shell settings put system system_locales en-US
+            adb shell settings put secure show_ime_with_hard_keyboard 1
+            gradle --no-daemon -p android-app connectedDebugAndroidTest
+            mkdir -p native-artifacts
+            adb pull /sdcard/Download native-artifacts/Download
+      - name: Validate synthetic printed PDF text
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y poppler-utils
+          PDF=$(find native-artifacts -iname '*.pdf' | head -n 1)
+          test -n "$PDF"
+          pdftotext "$PDF" native-artifacts/printed-fixture.txt
+          grep -q 'AAW-NATIVE-PRINT-FIXTURE' native-artifacts/printed-fixture.txt
+      - name: Upload emulator test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AAW-Android-Smoke-Evidence
+          path: |
+            android-app/app/build/reports/androidTests/
+            android-app/app/build/outputs/androidTest-results/
+            native-artifacts/

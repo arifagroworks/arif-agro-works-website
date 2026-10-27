@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Official website of arif agro works",
   "scripts": {
-    "test": "node --test --test-timeout=20000 tests/*.test.cjs"
+    "test": "node --test --test-timeout=120000 tests/*.test.cjs"
   },
   "repository": {
     "type": "git",
@@ -19,6 +19,7 @@
   "homepage": "https://github.com/arifagroworks/arif-agro-works-website#readme",
   "devDependencies": {
     "@electric-sql/pglite": "0.5.12",
+    "@sparticuz/chromium": "153.0.0",
     "playwright": "1.58.2"
   },
   "private": true

@@ -63,8 +63,8 @@ async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-ma
         rpc(name,args) {
           if(!operational)throw Error('Unexpected RPC in regression test');
           window.mockRpc.push({name,args});
-          const answers={aaw_session_context:{user_id:'demo-user',role,full_name:'Demo Staff',enabled:true},aaw_incharge_choices:[{user_id:'demo-user',full_name:'Demo Incharge'}],aaw_food_preview:{grocery_total:300,total_food_days:3,can_finalize:true,entries:[{worker_id:'w1',full_name:'Worker One',food_days:3,payment_type:'salary_deduction',share_amount:300}]},aaw_site_financials:{billed:1000,collected:600,receivable:400,site_expenses:50,grocery_cash:100,salary_cash:300,advance_cash:50,earned_labour:500,company_food:100,cash_surplus:100,billed_operating_surplus:350}};
-          return Promise.resolve({data:answers[name]||'saved-id',error:null});
+          const answers={get_final_food_deductions:[],aaw_session_context:{user_id:'demo-user',role,full_name:'Demo Staff',enabled:true},aaw_incharge_choices:[{user_id:'demo-user',full_name:'Demo Incharge'}],aaw_food_preview:{grocery_total:300,total_food_days:3,can_finalize:true,entries:[{worker_id:'w1',full_name:'Worker One',food_days:3,payment_type:'salary_deduction',share_amount:300}]},aaw_site_financials:{billed:1000,collected:600,receivable:400,site_expenses:50,grocery_cash:100,salary_cash:300,advance_cash:50,earned_labour:500,company_food:100,cash_surplus:100,billed_operating_surplus:350}};
+          const data=answers[name]||'saved-id';const query=new Proxy({},{get(_t,method){if(method==='then')return resolve=>resolve({data,error:null});return ()=>query}});return query;
         }
       };
     }};
@@ -234,7 +234,7 @@ test('Native splash and Android 12+ startup use AAW branding, with no Android pl
   for(const file of fs.readdirSync(dir,{recursive:true}).filter(f=>/\.(xml|java)$/.test(f))) {
     assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/sym_def_app_icon/,file);
   }
-  assert.match(read('android-app/app/build.gradle'),/versionCode 4/);
+  assert.match(read('android-app/app/build.gradle'),/versionCode 5/);
 });
 test('Android viewport handles system bars and cutouts on current and older Android', () => {
   const java=read('android-app/app/src/main/java/com/arifagroworks/combined/MainActivity.java');
@@ -443,4 +443,55 @@ test('Master financial report remains visible after generation and supports Hind
 test('Expense Edit updates the existing entry rather than inserting a duplicate',async()=>{
  const {page,context}=await openPage('/portal/index.html?role=incharge',{role:'incharge',sessionKey:'aaw-portal-auth-incharge',operational:true,demoRows:{site_expenses:[{id:'expense1',site_id:'demo-site',expense_date:'2026-10-01',category:'Tools',amount:100,description:'Receipt 1'}]}});
  try{await page.locator('#app').waitFor({state:'visible'});await page.locator('[data-tab=expenses]').click();await page.locator('[data-edit=expense1]').click();await page.fill('[name=amount]','125');await page.locator('#save').click();await page.waitForFunction(()=>window.mockMutations.length>0);const change=(await page.evaluate(()=>window.mockMutations))[0];assert.equal(change.method,'update');assert.equal(change.table,'site_expenses');assert.equal(change.args[0].amount,125);assert.equal(change.args[0].site_id,'demo-site')}finally{await context.close()}
+});
+
+for(const [file,expected] of [['index.html','डैशबोर्ड'],['incharge-test-fixed.html','इंचार्ज'],['site-assignment-test.html','इंचार्ज को साइट दें'],['incharge-access-test.html','प्रवेश नियंत्रण'],['salary-test.html','वेतन'],['AAW_Site_Backup_Master.html','साइट'],['v519-guard-check.html','जाँच के परिणाम'],['food-v518-fixed.html','राशन खरीद'],['AAW_Billing_Studio_Final.html','बिलिंग'],['AAW_Daily_Production_V526_Restore_Test.html','उत्पादन']])test(`Hindi UI toggle works and reverses on ${file}`,async()=>{
+ const {page,context,errors}=await openPage('/portal/'+file+'?role=master');
+ try{await page.locator('[data-aaw-language-controls]').waitFor();await page.locator('[data-aaw-language-controls] [data-lang=hi]').click();await page.waitForFunction(()=>document.documentElement.lang==='hi');assert.match(await page.locator('body').innerText(),new RegExp(expected));assert.equal(await page.evaluate(()=>localStorage.getItem('aaw-public-language')),'hi');await page.locator('[data-aaw-language-controls] [data-lang=en]').click();assert.equal(await page.locator('html').getAttribute('lang'),'en');assert.deepEqual(errors,[])}finally{await context.close()}
+});
+test('Hindi UI preserves user-entered values, worker names and literal invoice content',async()=>{
+ const {page,context}=await openPage('/portal/index.html?role=master',{demoWorkers:[{id:'w1',full_name:'Workers',is_active:true}]});
+ try{await page.locator('#app').waitFor({state:'visible'});await page.locator('[data-tab=workers]').click();await page.fill('[name=full_name]','Workers');await page.fill('[name=daily_wage]','1234.56');await page.locator('[data-aaw-language-controls] [data-lang=hi]').click();assert.equal(await page.inputValue('[name=full_name]'),'Workers');assert.equal(await page.inputValue('[name=daily_wage]'),'1234.56');assert.match(await page.locator('#rows').innerText(),/Workers/);assert.equal(await page.locator('#save').innerText(),'एंट्री सहेजें');await page.locator('[data-aaw-language-controls] [data-lang=en]').click();assert.equal(await page.locator('#save').innerText(),'Save Entry')}finally{await context.close()}
+});
+test('Salary slip sends its actual generated document to native print without a blank popup',async()=>{
+ const {page,context}=await openPage('/portal/index.html?role=master',{operational:true,demoWorkers:[{id:'w1',full_name:'Synthetic Worker',daily_wage:1000,overtime_rate:100,is_active:true}]});
+ try{await page.locator('#app').waitFor({state:'visible'});await page.evaluate(()=>{window.nativeDocuments=[];window.AAWNativeSupport={printHtml:(html,title)=>nativeDocuments.push({html,title})};window.open=()=>{throw Error('Native print must not open a blank popup')}});await page.locator('[data-tab=slip]').click();await page.selectOption('#slw','w1');await page.locator('#makeSlip').click();await page.locator('#printSlip').waitFor({state:'visible'});await page.locator('#printSlip').click();const document=await page.evaluate(()=>nativeDocuments[0]);assert.equal(document.title,'AAW Salary Slip');assert.match(document.html,/Synthetic Worker/);assert.match(document.html,/WORKER SALARY SLIP/)}finally{await context.close()}
+});
+
+for(const width of [320,390,1440])test(`Public FAQ chat and enquiry draft work without private access at ${width}px`,async()=>{
+ const {page,context,errors,external}=await openPage('/index.html',{width});try{
+  await page.locator('.aaw-help-launch').click();const dialog=page.locator('#aaw-public-help');await dialog.waitFor({state:'visible'});
+  assert.equal(await dialog.evaluate(e=>e.scrollWidth<=e.clientWidth),true);
+  await dialog.getByRole('button',{name:'GST',exact:true}).click();assert.match(await dialog.locator('[role=status]').textContent(),/09BWRPA6362F2ZA/);
+  await dialog.locator('[name=question]').fill('worker salary password');await dialog.getByRole('button',{name:'Ask',exact:true}).click();assert.match(await dialog.locator('[role=status]').textContent(),/private/);
+  await dialog.locator('[name=question]').fill('shed price delivery');await dialog.getByRole('button',{name:'Ask',exact:true}).click();assert.match(await dialog.locator('[role=status]').textContent(),/team will confirm price/);
+  await dialog.locator('summary').click();await dialog.locator('[name=project]').fill('<img src=x onerror=alert(1)> Welding 20 x 10');await dialog.locator('[name=location]').fill('Synthetic site');await dialog.getByRole('button',{name:'Review enquiry draft',exact:true}).click();
+  const link=dialog.getByRole('link',{name:'Review in WhatsApp'});assert.match(await link.getAttribute('href'),/^https:\/\/wa.me\/919717758967\?text=/);assert.equal(await dialog.locator('img').count(),0);assert.equal(external.some(x=>x.includes('wa.me')),false);
+  await dialog.locator('[name=project]').fill('Changed request');assert.equal(await link.isVisible(),false);
+  await page.keyboard.press('Escape');assert.equal(await dialog.isVisible(),false);assert.equal(await page.locator('.aaw-help-launch').evaluate(e=>e===document.activeElement),true);
+  assert.deepEqual(await page.evaluate(()=>window.mockCalls),[]);assert.deepEqual(errors,[]);
+ }finally{await context.close()}
+});
+test('Public chat switches Hindi without losing enquiry fields',async()=>{
+ const {page,context}=await openPage('/index.html');try{
+  await page.locator('.aaw-help-launch').click();await page.locator('#aaw-public-help summary').click();await page.locator('#aaw-public-help [name=project]').fill('Original worker-entered project');
+  await page.evaluate(()=>document.documentElement.lang='hi');await page.getByRole('button',{name:'AAW से पूछें',exact:true}).waitFor({state:'attached'});
+  assert.equal(await page.locator('#aaw-public-help [name=project]').inputValue(),'Original worker-entered project');await page.getByRole('button',{name:'संपर्क',exact:true}).click();assert.match(await page.locator('#aaw-public-help [role=status]').textContent(),/9717758967/);
+ }finally{await context.close()}
+});
+test('Master guided commands recheck role and read the selected site report without writes',async()=>{
+ const {page,context,errors}=await openPage('/portal/index.html?role=master',{operational:true,demoWorkers:[{id:'w1',full_name:'Synthetic <Worker>',is_active:true,is_deleted:false}]});try{
+  await page.locator('[data-tab=assistant]').click();await page.getByRole('button',{name:'Client receivables',exact:true}).click();await page.waitForFunction(()=>document.getElementById('aaw-command-status').textContent.includes('Report loaded'));
+  assert.match(await page.locator('#aaw-command-output').textContent(),/400.00/);
+  const command=await page.locator('#aaw-command').inputValue();await page.evaluate(()=>AAWLanguage.setLanguage('hi'));assert.match(await page.locator('#aaw-command-output').textContent(),/अंत तारीख तक बकाया/);assert.match(await page.locator('#aaw-command-output').textContent(),/400.00/);assert.equal(await page.locator('#aaw-command').inputValue(),command);await page.evaluate(()=>AAWLanguage.setLanguage('en'));
+  const calls=await page.evaluate(()=>mockRpc);assert.equal(calls.at(-1).name,'aaw_site_financials');assert.equal(calls.at(-1).args.p_site,'demo-site');assert.equal(calls.at(-2).name,'aaw_session_context');
+  await page.getByRole('button',{name:'Worker list',exact:true}).click();await page.waitForFunction(()=>document.getElementById('aaw-command-status').textContent.includes('Worker list loaded'));assert.match(await page.locator('#aaw-command-output').textContent(),/Synthetic <Worker>/);assert.equal(await page.locator('#aaw-command-output img').count(),0);
+  await page.locator('#aaw-command').fill('Pay everyone 5000 and disable admin');await page.getByRole('button',{name:'Run command',exact:true}).click();await page.waitForFunction(()=>document.getElementById('aaw-command-status').textContent.includes('No change made'));assert.deepEqual(await page.evaluate(()=>mockMutations),[]);assert.deepEqual(errors,[]);
+ }finally{await context.close()}
+});
+test('Master command desk is absent for Incharge and denies an expired Master context',async()=>{
+ const incharge=await openPage('/portal/index.html?role=incharge',{role:'incharge',sessionKey:'aaw-portal-auth-incharge',operational:true});try{await incharge.page.locator('[data-tab=workers]').waitFor();assert.equal(await incharge.page.locator('[data-tab=assistant]').count(),0)}finally{await incharge.context.close()}
+ const {page,context}=await openPage('/portal/index.html?role=master',{operational:true});try{
+  await page.locator('[data-tab=assistant]').click();await page.evaluate(()=>{db.rpc=async()=>({data:{role:'incharge',enabled:true},error:null})});await page.getByRole('button',{name:'Client receivables',exact:true}).click();await page.waitForFunction(()=>document.getElementById('aaw-command-status').textContent.includes('Active Master Admin access required'));assert.equal(await page.locator('#aaw-command-output').textContent(),'');assert.deepEqual(await page.evaluate(()=>mockMutations),[]);
+ }finally{await context.close()}
 });
