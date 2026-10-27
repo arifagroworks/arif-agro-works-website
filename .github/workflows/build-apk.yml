@@ -2,12 +2,35 @@ name: Build ARIF AGRO WORKS APK
 
 on:
   workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
+concurrency:
+  group: aaw-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Run isolated browser and calculation regressions
+        run: npm test
+
   build:
+    needs: regression
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - name: Checkout current repository
@@ -56,7 +79,20 @@ jobs:
       - name: Verify APK output
         run: |
           test -s android-app/app/build/outputs/apk/debug/app-debug.apk
-          ls -lh android-app/app/build/outputs/apk/debug/app-debug.apk
+          APK=android-app/app/build/outputs/apk/debug/app-debug.apk
+          AAPT="${ANDROID_HOME}/build-tools/35.0.0/aapt"
+          "$AAPT" dump badging "$APK" | tee apk-badging.txt
+          grep -q "package: name='com.arifagroworks.combined'" apk-badging.txt
+          grep -q "launchable-activity: name='com.arifagroworks.combined.MainActivity'" apk-badging.txt
+          unzip -l "$APK" | grep 'res/drawable/aaw_logo.png'
+          "$AAPT" dump xmltree "$APK" res/layout/activity_splash.xml > apk-splash.txt
+          grep -q 'android:src' apk-splash.txt
+          if grep -q 'sym_def_app_icon' apk-splash.txt; then exit 1; fi
+          "$AAPT" dump resources "$APK" > apk-resources.txt
+          ICON_ID=$(python3 -c 'import re; s=open("apk-resources.txt").read(); print(re.search(r"resource (0x[0-9a-f]+) [^\n]*:drawable/aaw_logo:", s).group(1))')
+          grep -q "android:src.*@$ICON_ID" apk-splash.txt
+          "$AAPT" dump badging "$APK" | grep "versionName='1.2'"
+          ls -lh "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

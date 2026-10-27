@@ -24,7 +24,7 @@
     .muted { color: #64748b; font-size: 13px; }
     #message { padding: 12px; border-radius: 9px; background: #eaf1fa; margin-bottom: 16px; white-space: pre-wrap; }
   </style>
-</head>
+<script src="aaw-session.js"></script></head>
 <body>
 <header>
   <h2>ARIF AGRO WORKS</h2>
@@ -58,7 +58,7 @@
 <script>
 const SB_URL = "https://qfydekphbdpvvczhimjs.supabase.co";
 const SB_KEY = "sb_publishable_s7zc99g86_YZJeN0vbCzwA_gCrkdavn";
-const db = window.supabase.createClient(SB_URL, SB_KEY);
+const db = window.supabase.createClient(SB_URL, SB_KEY, window.AAWSession.options('master'));
 
 const $ = id => document.getElementById(id);
 let incharges = [];

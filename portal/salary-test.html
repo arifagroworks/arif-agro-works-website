@@ -28,7 +28,7 @@ th:first-child,td:first-child{text-align:left}
 #app{display:none}
 #message{white-space:pre-wrap}
 </style>
-</head>
+<script src="aaw-session.js"></script></head>
 <body>
 
 <header>
@@ -115,7 +115,8 @@ const SUPABASE_KEY =
 
 const db = supabase.createClient(
   SUPABASE_URL,
-  SUPABASE_KEY
+  SUPABASE_KEY,
+  window.AAWSession.options('master')
 );
 
 const $ = id => document.getElementById(id);
@@ -238,7 +239,7 @@ $('loginBtn').onclick = async () => {
 };
 
 $('logoutBtn').onclick = async () => {
-  await db.auth.signOut();
+  await db.auth.signOut({scope:'local'});
   await start();
 };
 

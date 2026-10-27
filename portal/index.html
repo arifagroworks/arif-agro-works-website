@@ -27,7 +27,7 @@ button:disabled{opacity:.5}
 .card{padding:12px;background:#092333;border:1px solid #36596b;border-radius:9px;margin:9px 0;overflow-wrap:anywhere}
 .card small{display:block;margin:5px 0}
 #notice,#loginMsg{white-space:pre-wrap;overflow-wrap:anywhere;color:#ffccaa;margin:12px 0;font-size:13px}
-.att{border-bottom:1px solid #36596b;padding:10px 0}
+.atimes[hidden]{display:none}.att{border-bottom:1px solid #36596b;padding:10px 0}
 .wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{border:1px solid #36596b;padding:9px 5px;text-align:center}
@@ -271,14 +271,14 @@ function masterTools(){
     ['Salary Guard Check','v519-guard-check.html','Run authenticated Master Admin guard diagnostic; no payment is retained']
   ];
   $('content').innerHTML='<h2>Master Admin Tools</h2><p class="muted">Separate secured test pages. No production deployment or database changes from these shortcuts.</p>'+
-    links.map(([name,path,desc])=>`<div class="card"><h3>${esc(name)}</h3><p class="muted">${esc(desc)}</p><a style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px 14px;border-radius:8px;max-width:100%;overflow-wrap:anywhere" href="${encodeURI(path)}" target="_blank" rel="noopener noreferrer">Open ${esc(name)} ↗</a></div>`).join('')+
+    links.map(([name,path,desc])=>`<div class="card"><h3>${esc(name)}</h3><p class="muted">${esc(desc)}</p><a style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px 14px;border-radius:8px;max-width:100%;overflow-wrap:anywhere" href="${encodeURI(path)}?role=${encodeURIComponent(expectedRole||'direct')}" target="_blank" rel="noopener noreferrer">Open ${esc(name)} ↗</a></div>`).join('')+
     '<p class="muted">Note: Username is not shown when the source record has no username field. This does not affect the existing account. Live V5.8 remains unchanged. Salary payment saves are disabled in this test portal until the database guard is verified with an active test worker.</p>';
 }
 
 function productionPanel(site){
   const selected=sites.find(s=>String(s.id)===String(site));
   const siteName=selected?.name||selected?.site_name||'Selected Site';
-  const productionUrl='AAW_Daily_Production_V526_Restore_Test.html?site_id='+encodeURIComponent(String(site));
+  const productionUrl='AAW_Daily_Production_V526_Restore_Test.html?site_id='+encodeURIComponent(String(site))+'&role='+encodeURIComponent(expectedRole||'direct');
   $('content').innerHTML=`<h2>Daily Production · V5.34</h2>
   <p class="muted">${esc(siteName)} · Secure Supabase Production Register. The V5.26 production page independently verifies the signed-in account and assigned sites. Production entry and report are locked to this selected site. Switch sites using the main portal selector.</p>
   <div class="card">
@@ -294,7 +294,7 @@ function billingPanel(){
     $('content').textContent='Master Admin only';
     return;
   }
-  const url='AAW_Billing_Studio_Final.html';
+  const url='AAW_Billing_Studio_Final.html?role='+encodeURIComponent(expectedRole||'direct');
   $('content').innerHTML=`<h2>Company Documents & Billing Studio</h2>
   <p class="muted">Master Admin workspace · Approved Blue + White Corporate design. Letterhead, Invoice, Quotation, Work Proforma and Measurement Bill.</p>
   <div class="card"><div class="actions"><a href="${url}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:800;padding:12px 15px;border-radius:8px;text-decoration:none">Open Billing Studio Full Screen ↗</a></div>
@@ -398,20 +398,29 @@ await render();notice(restoring?'Restored':'Deleted from list; history kept');
 }
 
 /* Shared salary calculation */
-async function salaryData(site,from,to,id='all'){
+async function allSalaryRows(query){
+const rows=[],size=500;
+for(let offset=0;offset<100000;offset+=size){
+const r=await query.range(offset,offset+size-1);if(r.error)throw r.error;
+const page=r.data||[];rows.push(...page);if(page.length<size)return rows;
+}
+throw Error('Salary record limit reached; use an independently verified reconciliation');
+}
+async function salaryData(site,from,to,id='all',cumulative=false){
 if(!from||!to||from>to)throw Error('Invalid salary dates');
 let a=db.from('worker_attendance').select('worker_id,status,overtime_hours').eq('site_id',site).gte('attendance_date',from).lte('attendance_date',to);
 let b=db.from('worker_advances').select('worker_id,amount,notes').eq('site_id',site).gte('advance_date',from).lte('advance_date',to);
-let c=db.from('worker_salary_payments').select('worker_id,amount').eq('site_id',site).lte('period_start',to).gte('period_end',from);
+let c=db.from('worker_salary_payments').select('worker_id,amount').eq('site_id',site);
+c=cumulative?c.lte('payment_date',to):c.lte('period_start',to).gte('period_end',from);
 if(id!=='all'){a=a.eq('worker_id',id);b=b.eq('worker_id',id);c=c.eq('worker_id',id)}
 const r=await Promise.all([
- a.range(0,9999),b.range(0,9999),c.range(0,9999),
- db.rpc('get_final_food_deductions',{p_site_id:site,p_start:from,p_end:to})
+ allSalaryRows(a.order('id')),allSalaryRows(b.order('id')),allSalaryRows(c.order('id')),
+ allSalaryRows(db.rpc('get_final_food_deductions',{p_site_id:site,p_start:from,p_end:to}).order('worker_id'))
 ]);
-for(const x of r){if(x.error)throw x.error}
-for(const x of r.slice(0,3)){if(x.data.length===10000)throw Error('Use shorter salary period')}
-return {attendance:r[0].data||[],advances:r[1].data||[],payments:r[2].data||[],finalFood:r[3].data||[]};
+return {attendance:r[0],advances:r[1],payments:r[2],finalFood:r[3]};
 }
+// The payment guard uses all earnings/deductions through the cutoff, not just this month.
+async function salaryCutoffData(site,to,id){return salaryData(site,'0001-01-01',to,id,true)}
 function calculateWorker(w,data){
 let match=x=>String(x.worker_id)===String(w.id);
 let att=data.attendance.filter(match),adv=data.advances.filter(match),pay=data.payments.filter(match);
@@ -460,6 +469,7 @@ $('results').innerHTML=list.filter(w=>id==='all'||String(w.id)===id).map(w=>{
 let x=calculateWorker(w,data);total+=x.due;
 return `<div class="card"><b>${esc(w.full_name)}</b>
 <small>Paid Days: ${x.days} · OT: ${x.ot} hours</small>
+<small>Cumulative balance through ${esc(to)}; selected period labels the payment.</small>
 <small>Wages ${cash(x.wage)} + OT ${cash(x.otPay)}</small>
 <small>Advance ${cash(x.advance)} · Manual Food ${cash(x.manualFood)} · Final Food ${cash(x.finalFood)} · Salary Paid ${cash(x.paid)}</small>
 <b>Balance: ${cash(x.due)}</b></div>`;
@@ -469,6 +479,20 @@ notice('Calculation complete');
 finally{$('calc').disabled=false}
 };
 }catch(e){notice('Salary Error: '+e.message)}
+}
+function calculateOvertime(checkIn,checkOut,nextDay=false){
+const minutes=s=>{const m=/^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(s));if(!m||+m[1]>23||+m[2]>59||+(m[3]||0)>59)throw Error('Enter valid In-Time and Out-Time');return +m[1]*60 + +m[2] + +(m[3]||0)/60};
+const start=minutes(checkIn),end=minutes(checkOut)+(nextDay?1440:0),duration=end-start;
+if(duration<=0||duration>1440)throw Error('Check Out-Time or select Next Day for an overnight shift');
+return Math.round(Math.max(0,duration/60-8)*100)/100;
+}
+function readAttendanceRow(row){
+const status=row.querySelector('.as').value,working=!['absent','leave'].includes(status),auto=row.querySelector('.amode').value==='time';
+let check_in=null,check_out=null,ot=Number(row.querySelector('.ao').value);
+if(working&&auto){check_in=row.querySelector('.ain').value;check_out=row.querySelector('.aout').value;ot=calculateOvertime(check_in,check_out,row.querySelector('.anext').checked)}
+if(!working)ot=0;
+if(!Number.isFinite(ot)||ot<0)throw Error('Invalid OT hours');
+return {status,overtime_hours:ot,check_in,check_out};
 }
 async function attendance(site){
 let active=workers.filter(w=>!w.is_deleted&&w.is_active!==false);
@@ -484,7 +508,7 @@ async function load(){
 loaded='';$('saveAtt').disabled=true;
 try{
 let day=$('ad').value;
-let r=await db.from('worker_attendance').select('id,worker_id,status,overtime_hours').eq('site_id',site).eq('attendance_date',day).range(0,9999);
+let r=await db.from('worker_attendance').select('id,worker_id,status,overtime_hours,check_in,check_out').eq('site_id',site).eq('attendance_date',day).range(0,9999);
 if(r.error)throw r.error;
 if(r.data.length===10000)throw Error('Too many records');
 saved=new Map();duplicates=false;
@@ -496,10 +520,14 @@ $('alist').innerHTML=active.map(w=>{
 let x=saved.get(String(w.id)),s=x?.status||'present';
 return `<div class="att" data-id="${esc(w.id)}"><b>${esc(w.full_name)}</b><div class="grid">
 <label>Status<select class="as">${[['present','Present'],['absent','Absent'],['half_day','Half Day'],['leave','Leave']].map(([v,n])=>`<option value="${v}" ${s===v?'selected':''}>${n}</option>`).join('')}</select></label>
-<label>OT Hours<input class="ao" type="number" min="0" step="0.5" value="${Number(x?.overtime_hours||0)}"></label></div></div>`;
+<label>Attendance Mode<select class="amode"><option value="manual">Manual OT</option><option value="time" ${x?.check_in&&x?.check_out?'selected':''}>In-Time / Out-Time</option></select></label>
+<label>OT Hours<input class="ao" type="number" min="0" step="0.01" value="${Number(x?.overtime_hours||0)}"></label></div>
+<div class="grid atimes" hidden><label>In-Time<input class="ain" type="time" value="${esc((x?.check_in||'').slice(0,5))}"></label><label>Out-Time<input class="aout" type="time" value="${esc((x?.check_out||'').slice(0,5))}"></label><label><input class="anext" type="checkbox" style="width:auto" ${x?.check_out&&x?.check_in&&x.check_out<=x.check_in?'checked':''}> Out-Time next day</label></div><small class="atip"></small></div>`;
 }).join('');
-$('alist').querySelectorAll('.as').forEach(s=>s.onchange=()=>{
-if(['absent','leave'].includes(s.value))s.closest('.att').querySelector('.ao').value=0;
+$('alist').querySelectorAll('.att').forEach(row=>{
+const update=()=>{const auto=row.querySelector('.amode').value==='time';row.querySelector('.atimes').hidden=!auto;row.querySelector('.ao').readOnly=auto;
+try{const value=readAttendanceRow(row);row.querySelector('.ao').value=value.overtime_hours;row.querySelector('.atip').textContent=auto?'OT calculated after 8 hours.':''}catch(e){row.querySelector('.atip').textContent=e.message}};
+row.querySelectorAll('input,select').forEach(el=>el.addEventListener('change',update));update();
 });
 loaded=day;$('saveAtt').disabled=duplicates||!active.length;
 notice(duplicates?'Duplicate attendance found; saving disabled':'Attendance loaded: '+day);
@@ -508,24 +536,21 @@ notice(duplicates?'Duplicate attendance found; saving disabled':'Attendance load
 $('load').onclick=load;
 $('ad').onchange=()=>{loaded='';$('saveAtt').disabled=true;$('alist').innerHTML='Press Load Attendance'};
 $('present').onclick=()=>{
-$('alist').querySelectorAll('.as').forEach(s=>s.value='present');
+$('alist').querySelectorAll('.as').forEach(s=>{s.value='present';s.dispatchEvent(new Event('change'))});
 notice('Marked Present; press Save All');
 };
 $('saveAtt').onclick=async()=>{
 if(loaded!==$('ad').value||duplicates)return;
 let rows=[...$('alist').querySelectorAll('.att')];
-let entries=rows.map(x=>{
-let s=x.querySelector('.as').value,ot=Number(x.querySelector('.ao').value);
-return {id:x.dataset.id,status:s,ot:['absent','leave'].includes(s)?0:ot};
-});
-if(entries.some(x=>!Number.isFinite(x.ot)||x.ot<0)){notice('Invalid OT');return}
+let entries;
+try{entries=rows.map(row=>({id:row.dataset.id,...readAttendanceRow(row)}))}catch(e){notice(e.message);return}
 if(!confirm('Save '+entries.length+' workers attendance for '+loaded+'?'))return;
 $('saveAtt').disabled=true;let ok=0,errors=[];
 for(let x of entries){
 let old=saved.get(String(x.id));
 let r=old
-?await db.from('worker_attendance').update({status:x.status,overtime_hours:x.ot}).eq('id',old.id).eq('site_id',site).select('id')
-:await db.from('worker_attendance').insert({site_id:site,worker_id:x.id,attendance_date:loaded,status:x.status,overtime_hours:x.ot}).select('id');
+?await db.from('worker_attendance').update({status:x.status,overtime_hours:x.overtime_hours,check_in:x.check_in,check_out:x.check_out}).eq('id',old.id).eq('site_id',site).select('id')
+:await db.from('worker_attendance').insert({site_id:site,worker_id:x.id,attendance_date:loaded,status:x.status,overtime_hours:x.overtime_hours,check_in:x.check_in,check_out:x.check_out}).select('id');
 if(r.error||!r.data?.length)errors.push(r.error?.message||'Permission denied');else ok++;
 }
 notice(ok+' Saved; '+errors.length+' Failed'+(errors.length?'\n'+errors.slice(0,3).join('\n'):''));
@@ -719,7 +744,7 @@ const bytes=Uint8Array.from(atob(EMBEDDED_FOOD_HTML),c=>c.charCodeAt(0));
 return new TextDecoder().decode(bytes);
 }
 async function foodManagement(site){
-$('content').innerHTML='<h2>Food Management · V5.18</h2><p class="muted">New food periods only for active workers. Archived worker history remains available. This is a separate test module.</p><p><a href="food-v518-fixed.html" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px;border-radius:8px">Open Food Management ↗</a></p>';
+$('content').innerHTML=`<h2>Food Management · V5.18</h2><p class="muted">New food periods only for active workers. Archived worker history remains available. This is a separate test module.</p><p><a href="food-v518-fixed.html?role=${encodeURIComponent(expectedRole||'direct')}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px;border-radius:8px">Open Food Management ↗</a></p>`;
 notice('Food Management loaded');
 }
 async function salaryPayment(site){
@@ -754,10 +779,11 @@ const calculate=async()=>{
 const worker=$('pw').value,from=$('pf').value,to=$('pt').value;
 if(!worker||!from||!to||from>to)throw Error('Select a worker and valid period');
 const w=list.find(x=>String(x.id)===worker);if(!w)throw Error('Worker not active');
-const data=await salaryData(site,from,to,worker),x=calculateWorker(w,data);
+const data=await salaryCutoffData(site,to,worker),x=calculateWorker(w,data);
 const due=Math.round(x.due*100)/100;
 verified={worker,from,to,due};
 $('payPreview').innerHTML=`<div class="card"><b>${esc(w.full_name)}</b>
+<small>Cumulative balance through ${esc(to)}; selected period labels the payment.</small>
 <small>Wages ${cash(x.wage)} + OT ${cash(x.otPay)} = Gross ${cash(x.gross)}</small>
 <small>Advances ${cash(x.advance)} · Manual Food ${cash(x.manualFood)} · Final Food ${cash(x.finalFood)} · Already Paid ${cash(x.paid)}</small>
 <b>Available Balance: ${cash(due)}</b></div>`;
