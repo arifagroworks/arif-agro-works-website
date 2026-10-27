@@ -1,0 +1,24 @@
+{
+  "name": "arif-agro-works-regression",
+  "version": "1.0.0",
+  "description": "Official website of arif agro works",
+  "scripts": {
+    "test": "node --test --test-timeout=20000 tests/*.test.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arifagroworks/arif-agro-works-website.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/arifagroworks/arif-agro-works-website/issues"
+  },
+  "homepage": "https://github.com/arifagroworks/arif-agro-works-website#readme",
+  "devDependencies": {
+    "playwright": "1.58.2"
+  },
+  "private": true
+}

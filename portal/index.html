@@ -266,7 +266,7 @@ function masterTools(){
     ['Incharge Management','incharge-test-fixed.html','Verified fixed listing · create accounts and reset passwords'],
     ['Site Assignment','site-assignment-test.html','Assign or change the site allocated to an incharge'],
     ['Incharge Access Control','incharge-access-test.html','Disable, enable and manage incharge login access'],
-    ['Food Management','food-v518-fixed.html','Active workers only for new food entries; historical records preserved'],
+    ['Food Management','food-v518-fixed.html?role='+encodeURIComponent(expectedRole||'direct'),'Active workers only for new food entries; historical records preserved'],
     ['Salary Reconciliation','salary-test.html','Review calculations without creating salary payments'],
     ['Salary Guard Check','v519-guard-check.html','Run authenticated Master Admin guard diagnostic; no payment is retained']
   ];
@@ -719,7 +719,7 @@ const bytes=Uint8Array.from(atob(EMBEDDED_FOOD_HTML),c=>c.charCodeAt(0));
 return new TextDecoder().decode(bytes);
 }
 async function foodManagement(site){
-$('content').innerHTML='<h2>Food Management · V5.18</h2><p class="muted">New food periods only for active workers. Archived worker history remains available. This is a separate test module.</p><p><a href="food-v518-fixed.html" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px;border-radius:8px">Open Food Management ↗</a></p>';
+$('content').innerHTML=`<h2>Food Management · V5.18</h2><p class="muted">New food periods only for active workers. Archived worker history remains available. This is a separate test module.</p><p><a href="food-v518-fixed.html?role=${encodeURIComponent(expectedRole||'direct')}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px;border-radius:8px">Open Food Management ↗</a></p>`;
 notice('Food Management loaded');
 }
 async function salaryPayment(site){
