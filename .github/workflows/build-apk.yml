@@ -72,6 +72,12 @@ jobs:
           echo 'Using current files from the GitHub repository.'
           find android-app/app/src/main/res -maxdepth 3 -type f -print || true
 
+      - name: Preserve debug update signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: aaw-debug-signing-v1
+
       - name: Build APK from current source
         working-directory: android-app
         run: gradle --no-daemon --stacktrace assembleDebug
@@ -91,7 +97,7 @@ jobs:
           "$AAPT" dump resources "$APK" > apk-resources.txt
           ICON_ID=$(python3 -c 'import re; s=open("apk-resources.txt").read(); print(re.search(r"resource (0x[0-9a-f]+) [^\n]*:drawable/aaw_logo:", s).group(1))')
           grep -q "android:src.*@$ICON_ID" apk-splash.txt
-          "$AAPT" dump badging "$APK" | grep "versionName='1.2'"
+          "$AAPT" dump badging "$APK" | grep "versionName='1.3'"
           ls -lh "$APK"
 
       - name: Upload APK
