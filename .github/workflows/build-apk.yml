@@ -24,7 +24,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium --only-shell
+      - name: Prepare pinned Chromium runtime
+        run: node docs/tools/prepare-test-browser.cjs
       - name: Run isolated browser and calculation regressions
         run: npm test
 
