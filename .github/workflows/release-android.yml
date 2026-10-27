@@ -110,7 +110,7 @@ jobs:
           version=re.search(r"versionName '([^']+)'",Path('android-app/app/build.gradle').read_text()).group(1)
           code=int(re.search(r'versionCode\s+(\d+)',Path('android-app/app/build.gradle').read_text()).group(1))
           package=Path('release-output/package-info.txt').read_text()
-          if not re.search(r"package: name='com.arifagroworks.combined' versionCode='"+str(code)+r"' versionName='"+re.escape(version)+"'",package):raise SystemExit('Compiled package identity/version differs from the release source')
+          if not re.search(r"package: name='com\.arifagroworks\.combined' versionCode='"+str(code)+r"' versionName='"+re.escape(version)+"'",package):raise SystemExit('Compiled package identity/version differs from the release source')
           import hashlib,os
           metadata={'package_name':'com.arifagroworks.combined','version_name':version,'version_code':code,'certificate_sha256':actual,'source_commit':os.environ['GITHUB_SHA'],'apk_sha256':hashlib.sha256(Path('release-output/AAW-Release.apk').read_bytes()).hexdigest(),'aab_sha256':hashlib.sha256(Path('release-output/AAW-Release.aab').read_bytes()).hexdigest()}
           Path('release-output/android-release.json').write_text(json.dumps(metadata,indent=2)+'\n')
