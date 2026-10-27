@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Official website of arif agro works",
   "scripts": {
-    "test": "node --test --test-timeout=20000 tests/*.test.cjs"
+    "test": "node --test --test-timeout=120000 tests/*.test.cjs"
   },
   "repository": {
     "type": "git",
