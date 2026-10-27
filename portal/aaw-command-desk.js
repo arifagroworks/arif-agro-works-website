@@ -1,7 +1,18 @@
 /* Guided Master commands. No external AI or database writes in this first stage. */
 (function(){
  'use strict';
- const hi=()=>document.documentElement.lang==='hi',T=(en,hindi)=>hi()?hindi:en;
+ const translations=new Map();let active=null;
+ const hi=()=>document.documentElement.lang==='hi',T=(en,hindi)=>{translations.set(en,hindi);return hi()?hindi:en};
+ function translateActive(){
+  if(!active?.heading.isConnected)return;
+  const root=active.container,walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;
+  while(node=walker.nextNode()){
+   if(node.parentElement.closest('li'))continue;
+   for(const [en,hindi] of translations){const from=hi()?en:hindi,to=hi()?hindi:en;if(node.nodeValue===from){node.nodeValue=to;break}if((from.endsWith(' ')&&node.nodeValue.startsWith(from))||node.nodeValue.startsWith(from+':')){node.nodeValue=to+node.nodeValue.slice(from.length);break}}
+  }
+  for(const input of root.querySelectorAll('input[placeholder]'))for(const [en,hindi]of translations){if(input.placeholder===(hi()?en:hindi)){input.placeholder=hi()?hindi:en;break}}
+ }
+ window.addEventListener('aaw-languagechange',translateActive);
  const e=(tag,text)=>{const node=document.createElement(tag);if(text)node.textContent=text;return node};
  const intent=q=>{
   if(/pay|payment|finaliz|delete|disable|enable|reset|transfer|rate|salary.*change|भुगतान|पैसे|अंतिम|डिलीट|हटाओ|बंद|चालू|पासवर्ड|स्थानांतरण|दर|वेतन.*बदल/i.test(q))return 'review';
@@ -18,7 +29,7 @@
  async function mount({db,role,container,site,siteName,open}){
   container.replaceChildren();
   if(role!=='master'){container.textContent=T('Master Admin only','केवल मास्टर एडमिन');return}
-  const heading=e('h2',T('Master command assistant','मास्टर कमांड सहायक'));container.append(heading);
+  const heading=e('h2',T('Master command assistant','मास्टर कमांड सहायक'));container.append(heading);active={container,heading};
   const note=e('p',T('Guided mode · No external AI connected. Read reports or open the right tool using the commands below. Payments and record changes stay in their reviewed forms.','Guided mode · बाहरी AI अभी जुड़ा नहीं है। नीचे दिए कमांड से रिपोर्ट देखें या सही टूल खोलें। भुगतान और रिकॉर्ड बदलाव उनके जाँच वाले फॉर्म में होंगे।'));note.className='muted';container.append(note);
   container.append(e('p',T('Selected site: ','चुनी साइट: ')+siteName));
   const form=e('form');form.className='grid';const label=e('label',T('Command','कमांड')),input=e('input');input.id='aaw-command';input.name='command';input.maxLength=400;input.required=true;input.placeholder=T('Show client receivables','क्लाइंट बकाया दिखाओ');label.append(input);form.append(label);
