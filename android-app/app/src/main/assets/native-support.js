@@ -29,9 +29,16 @@
   root.querySelectorAll('base').forEach(el=>el.remove());
   return '<!doctype html>'+root.outerHTML;
  }
+ function printHtml(html,title){
+  const parsed=new DOMParser().parseFromString(String(html),'text/html');
+  parsed.querySelectorAll('script,iframe,object,embed,base').forEach(el=>el.remove());
+  const clean='<!doctype html>'+parsed.documentElement.outerHTML;
+  if(new Blob([clean]).size>limit)throw Error('Print document exceeds 12 MB. Narrow the report.');
+  post({action:'print',html:clean,base:location.href,title:title||document.title||'AAW Document'});
+ }
  window.print=function(){try{const html=printable();if(new Blob([html]).size>limit)throw Error('Print document exceeds 12 MB. Narrow the report.');post({action:'print',html,base:location.href,title:document.title||'AAW Document'})}catch(error){fail(error)}};
  const original=HTMLAnchorElement.prototype.click;
  HTMLAnchorElement.prototype.click=function(){if(this.hasAttribute('download')&&this.href){saveUrl(this.href,this.download).catch(fail);return}return original.call(this)};
  document.addEventListener('click',event=>{const link=event.target.closest?.('a');if(!link)return;if(link.hasAttribute('download')){event.preventDefault();saveUrl(link.href,link.download).catch(fail)}else if(link.target==='_blank'&&link.href.startsWith(prefix)){link.target='_self'}},true);
- window.AAWNativeSupport=Object.freeze({saveUrl,printable});
+ window.AAWNativeSupport=Object.freeze({saveUrl,printable,printHtml});
 })();
