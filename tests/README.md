@@ -8,3 +8,5 @@ Coverage: Food session reuse and wrong-role rejection, Master/Incharge portal ta
 `AAW_TEST_ROOT` can point to an exported old revision to reproduce regressions. `AAW_CHROMIUM_PATH` optionally selects an installed Chromium executable.
 
 These checks do not certify Supabase RLS, database procedures, historical data integrity, real device APK installation, or pixel-perfect equivalence to an approved screenshot. They intentionally never connect to Supabase.
+
+The suite now also checks manual/time-based attendance (including overnight OT), cumulative salary cutoffs and pagination. `backend.test.cjs` creates a local in-memory PGlite database from a schema-only fixture and synthetic records, then applies the separate access-hardening proposal locally. No production database URL, key or data is used. These tests do not authorize applying the proposal to production.

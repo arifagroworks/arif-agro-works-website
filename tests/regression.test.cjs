@@ -23,7 +23,7 @@ after(async () => { await new Promise(resolve => server?.close(resolve)); });
 
 // All non-local requests are intercepted. The Supabase SDK itself is replaced,
 // so tests cannot read or mutate production, even with a real browser session.
-async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-master', width = 390 } = {}) {
+async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-master', width = 390, demoWorkers = [] } = {}) {
   const instance = await chromium.launch({ headless: true, ...(process.env.AAW_CHROMIUM_PATH ? { executablePath: process.env.AAW_CHROMIUM_PATH, args: ['--no-sandbox','--no-zygote','--single-process','--use-gl=angle','--use-angle=swiftshader','--in-process-gpu'] } : {}) });
   const context = await instance.newContext({ viewport: { width, height: 900 }, serviceWorkers: 'block' });
   const close = context.close.bind(context);
@@ -32,7 +32,7 @@ async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-ma
   page.setDefaultTimeout(5000);
   const external = [], errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  await context.addInitScript(({ role, sessionKey }) => {
+  await context.addInitScript(({ role, sessionKey, demoWorkers }) => {
     window.mockCalls = [];
     window.mockSignOut = [];
     const user = { id: 'demo-user' };
@@ -50,7 +50,7 @@ async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-ma
         from(table) {
           window.mockCalls.push(table);
           let data = table === 'staff_profiles' ? { role, full_name: 'Demo Staff' }
-            : table === 'sites' ? [{ id: 'demo-site', site_name: 'Demo Site', is_active: true }] : table === 'site_assignments' ? [{site_id:'demo-site',user_id:'demo-user'}] : [];
+            : table === 'sites' ? [{ id: 'demo-site', site_name: 'Demo Site', is_active: true }] : table === 'site_assignments' ? [{site_id:'demo-site',user_id:'demo-user'}] : table === 'workers' ? demoWorkers : [];
           const q = new Proxy({}, { get(_target, method) {
             if (method === 'eq') return (key, value) => { if (table === 'staff_profiles' && key === 'role' && value === 'incharge') data = []; return q; };
             if (method === 'then') return resolve => resolve({ data, error: null });
@@ -62,7 +62,7 @@ async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-ma
         rpc() { throw Error('Unexpected RPC in regression test'); }
       };
     }};
-  }, { role, sessionKey });
+  }, { role, sessionKey, demoWorkers });
   await context.route('**/*', route => {
     const requestUrl = route.request().url();
     if (requestUrl.startsWith(origin + '/')) return route.continue();
@@ -287,4 +287,62 @@ test('Billing supports a direct portal Master session without borrowing another 
  const {page,context}=await openPage('/portal/AAW_Billing_Studio_Final.html?role=direct',{sessionKey:'aaw-portal-auth-direct'});
  try{await page.waitForFunction(()=>!document.getElementById('aawGate'));assert.equal(await page.evaluate(()=>window.mockAuthKey),'aaw-portal-auth-direct');}
  finally{await context.close();}
+});
+
+const portalSource=read('portal/index.html');
+const overtime=vm.runInNewContext(portalSource.slice(portalSource.indexOf('function calculateOvertime('),portalSource.indexOf('function readAttendanceRow('))+'; calculateOvertime');
+for(const [start,end,nextDay,expected] of [['09:00','17:00',false,0],['09:00','19:30',false,2.5],['09:00','13:00',false,0],['22:00','08:00',true,2]]) {
+ test(`Automatic OT ${start} to ${end} (next day=${nextDay}) equals ${expected}`,()=>assert.equal(overtime(start,end,nextDay),expected));
+}
+test('Automatic OT rejects missing, invalid and reversed times',()=>{
+ for(const [start,end] of [['','18:00'],['29:00','18:00'],['18:00','09:00']])assert.throws(()=>overtime(start,end));
+});
+test('Bulk attendance supports manual and timed rows without creating database records',async()=>{
+ const {page,context}=await openPage('/portal/index.html?role=master',{demoWorkers:[{id:'demo-worker',full_name:'Demo Worker',is_active:true,is_deleted:false,daily_wage:1000,overtime_rate:100}]});
+ try{
+  await page.locator('#app').waitFor({state:'visible'});await page.locator('[data-tab="attendance"]').click();
+  await page.locator('.amode').selectOption('time');
+  await page.locator('.ain').fill('09:00');await page.locator('.ain').dispatchEvent('change');
+  await page.locator('.aout').fill('19:30');await page.locator('.aout').dispatchEvent('change');
+  assert.equal(await page.locator('.ao').inputValue(),'2.5');
+  const value=await page.evaluate(()=>readAttendanceRow(document.querySelector('.att')));
+  assert.deepEqual(value,{status:'present',overtime_hours:2.5,check_in:'09:00',check_out:'19:30'});
+  await page.locator('.as').selectOption('absent');
+  assert.deepEqual(await page.evaluate(()=>readAttendanceRow(document.querySelector('.att'))),{status:'absent',overtime_hours:0,check_in:null,check_out:null});
+ }finally{await context.close();}
+});
+test('Payable preview uses all prior earnings and payment dates through the server cutoff',async()=>{
+ const {page,context}=await openPage('/portal/index.html?role=master');
+ try{
+  await page.locator('#app').waitFor({state:'visible'});
+  const trace=await page.evaluate(async()=>{
+   const filters=[];
+   db={from(table){const q=new Proxy({},{get(_t,m){if(m==='then')return resolve=>resolve({data:[],error:null});return (...args)=>{filters.push({table,method:m,args});return q}}});return q},rpc(name,args){filters.push({name,args});const q=new Proxy({},{get(_t,m){if(m==='then')return resolve=>resolve({data:[],error:null});return ()=>q}});return q}};
+   await salaryCutoffData('demo-site','2026-10-03','demo-worker');return filters;
+  });
+  assert.ok(trace.some(x=>x.table==='worker_salary_payments'&&x.method==='lte'&&x.args[0]==='payment_date'&&x.args[1]==='2026-10-03'));
+  assert.equal(trace.some(x=>x.table==='worker_salary_payments'&&x.args[0]==='period_start'),false);
+  assert.ok(trace.some(x=>x.table==='worker_advances'&&x.method==='gte'&&x.args[1]==='0001-01-01'));
+ }finally{await context.close();}
+});
+
+test('Salary data pagination reads beyond the API row cap and propagates failures',async()=>{
+ const source=read('portal/index.html');const fn=vm.runInNewContext(source.slice(source.indexOf('async function allSalaryRows('),source.indexOf('async function salaryData('))+';allSalaryRows');
+ const demo=Array.from({length:1203},(_,i)=>({id:i})),ranges=[];
+ const rows=await fn({range:async(a,b)=>{ranges.push([a,b]);return {data:demo.slice(a,b+1),error:null}}});
+ assert.equal(rows.length,1203);assert.deepEqual(ranges,[[0,499],[500,999],[1000,1499]]);
+ await assert.rejects(()=>fn({range:async()=>({data:null,error:new Error('demo permission failure')})}),/permission failure/);
+});
+test('Food preview distributes paise exactly without a negative share',async()=>{
+ const {page,context}=await openPage('/portal/food-v518-fixed.html?role=master');
+ try{
+  await page.waitForFunction(()=>!document.getElementById('app').hidden);
+  await page.evaluate(()=>{
+   $('from').value='2026-10-01';$('to').value='2026-10-01';
+   groceryRows=[{purchase_date:'2026-10-01',amount:0.02}];
+   periodRows=['w1','w2','w3','w4'].map(worker_id=>({worker_id,start_date:'2026-10-01',end_date:'2026-10-01',payment_type:'salary_deduction'}));calculate();
+  });
+  const shares=await page.locator('#result tr').evaluateAll(rows=>rows.slice(1).map(r=>Number(r.cells[2].textContent.replace(/[^0-9.-]/g,''))));
+  assert.equal(shares.reduce((a,b)=>a+Math.round(b*100),0),2);assert.equal(Math.min(...shares),0);
+ }finally{await context.close();}
 });
