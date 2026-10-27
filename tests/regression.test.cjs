@@ -353,7 +353,7 @@ test('Food preview distributes paise exactly without a negative share',async()=>
  }finally{await context.close();}
 });
 
-for(const width of [360,768,1440]) {
+for(const width of [320,360,768,1440]) {
  test(`Approved Classic public design at ${width}px keeps contact and login links usable`,async()=>{
   const {page,context,errors}=await openPage('/index.html',{width});
   try {
@@ -363,10 +363,23 @@ for(const width of [360,768,1440]) {
    assert.ok((await page.locator('a[href*="role=master"]').count())>0);
    assert.ok((await page.locator('a[href*="role=incharge"]').count())>0);
    assert.ok((await page.locator('a[href^="tel:"]').count())>0);
+   assert.equal(await page.locator('.aaw-wordmark').innerText(),'ARIF AGRO WORKS');
+   assert.ok(await page.locator('.aaw-wordmark').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=20));
+   assert.match(await page.locator('.aaw-gstin').innerText(),/09BWRPA6362F2ZA/);
+   assert.match(await page.locator('.aaw-business-details').innerText(),/09BWRPA6362F2ZA/);
+   assert.equal(await page.locator('.gallery .photo-card').count(),6);
+   await page.locator('.gallery').scrollIntoViewIfNeeded();
+   await page.waitForFunction(()=>Array.from(document.querySelectorAll('.gallery img')).every(img=>img.complete&&img.naturalWidth===1536&&img.naturalHeight===1024));
+   assert.equal(await page.locator('.aaw-about-visual figcaption').innerText(),'INDUSTRIAL SOLUTIONS');
+   if(process.env.AAW_SCREENSHOTS){await page.evaluate(async()=>{await document.fonts.ready;await Promise.all(Array.from(document.images).map(img=>img.decode().catch(()=>{})));scrollTo(0,0);await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));});await page.screenshot({path:`/tmp/aaw-public-en-${width}.png`,fullPage:true});await page.screenshot({path:`/tmp/aaw-public-top-${width}.png`});}
+
    await page.locator('.aaw-lang-btn[data-lang="hi"]').click();
    assert.match(await page.locator('.hero h1').innerText(),/फैब्रिकेशन/);
+   assert.equal(await page.locator('.aaw-about-visual figcaption').innerText(),'औद्योगिक समाधान');
+   assert.ok((await page.locator('#work .heading em').count())===1);
+   assert.match(await page.locator('#about .heading').innerText(),/गुणवत्ता/);
    assert.equal(await page.locator('html').getAttribute('lang'),'hi');
-   if(process.env.AAW_SCREENSHOTS){await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:`/tmp/aaw-public-${width}.png`,fullPage:true});}
+   if(process.env.AAW_SCREENSHOTS){await page.evaluate(async()=>{await document.fonts.ready;scrollTo(0,0);await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));});await page.screenshot({path:`/tmp/aaw-public-${width}.png`,fullPage:true});}
    assert.deepEqual(errors,[]);
   }finally{await context.close()}
  });
