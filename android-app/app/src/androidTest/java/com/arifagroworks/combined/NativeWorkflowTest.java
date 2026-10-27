@@ -12,6 +12,9 @@ import androidx.test.uiautomator.Until;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
+import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.concurrent.CountDownLatch;
@@ -24,6 +27,16 @@ public class NativeWorkflowTest {
     @Rule public ActivityTestRule<MainActivity> rule = new ActivityTestRule<>(MainActivity.class, false, false);
     private MainActivity activity;
     private UiDevice device;
+    @Rule public TestWatcher diagnostics = new TestWatcher() {
+        @Override protected void failed(Throwable error, Description description) {
+            try {
+                Log.e("AAW-Smoke", "Document: " + js("JSON.stringify({url:location.href,ready:document.readyState,html:document.body?.innerHTML})"));
+                ByteArrayOutputStream hierarchy = new ByteArrayOutputStream();
+                device.dumpWindowHierarchy(hierarchy);
+                Log.e("AAW-Smoke", "UI: " + hierarchy.toString("UTF-8"));
+            } catch (Exception ignored) { Log.e("AAW-Smoke", "Diagnostics unavailable", ignored); }
+        }
+    };
     @Before public void launch() throws Exception {
         device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
         activity = rule.launchActivity(new Intent().putExtra("aawNativeSmoke",true));
@@ -36,9 +49,10 @@ public class NativeWorkflowTest {
         assertTrue("JS response", done.await(10, TimeUnit.SECONDS)); return value.get();
     }
     private void page(String body) throws Exception {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> activity.testWebView().loadDataWithBaseURL(NativePolicy.BASE+"native-fixture.html", "<!doctype html><html><meta name='viewport' content='width=device-width, initial-scale=1'><title>AAW-Print-Test</title><style>body{font:22px sans-serif;padding:20px}button,input{font:22px sans-serif;padding:15px;margin:15px;display:block}@media print{button,input{display:none}}</style>"+body+"</html>","text/html","UTF-8",null));
+        String marker = Long.toString(System.nanoTime());
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> activity.testWebView().loadDataWithBaseURL(NativePolicy.BASE+"native-fixture.html", "<!doctype html><html><meta name='viewport' content='width=device-width, initial-scale=1'><title>AAW-Print-Test</title><style>body{font:22px sans-serif;padding:20px}button,input{font:22px sans-serif;padding:15px;margin:15px;display:block}@media print{button,input{display:none}}</style>"+body+"<i hidden id=fixture-"+marker+"></i></html>","text/html","UTF-8",NativePolicy.BASE+"native-fixture.html"));
         boolean ready=false;
-        for(int i=0;i<100;i++){ if("true".equals(js("!!window.AAWNativeSupport"))){ready=true;break;}SystemClock.sleep(100); }
+        for(int i=0;i<100;i++){ if("true".equals(js("!!window.AAWNativeSupport&&document.readyState==='complete'&&!!document.getElementById('fixture-"+marker+"')"))){ready=true;break;}SystemClock.sleep(100); }
         assertTrue("Origin-scoped native bridge installed",ready);
     }
     private UiObject2 findText(String text) { return device.wait(Until.findObject(By.text(text)), 15000); }

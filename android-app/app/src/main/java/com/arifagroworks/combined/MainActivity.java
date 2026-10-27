@@ -91,11 +91,14 @@ public class MainActivity extends Activity {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             WebViewCompat.addWebMessageListener(web, "AAWNative", Collections.singleton(NativePolicy.ORIGIN),
                 (view, message, origin, mainFrame, reply) -> {
+                    if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+                        android.util.Log.d("AAWNative", "Bridge URL="+view.getUrl()+" origin="+origin);
                     if (!NativePolicy.trusted(view.getUrl()) || !NativePolicy.trustedOrigin(origin.toString())) return;
                     try {
                         String payload = message.getData();
                         if (payload == null || payload.length() > NativePolicy.MAX_BYTES * 2) throw new Exception("Document is too large.");
                         JSONObject data = new JSONObject(payload);
+                        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) android.util.Log.d("AAWNative", "Action="+data.optString("action"));
                         if ("save".equals(data.optString("action"))) saveExport(data);
                         else if ("print".equals(data.optString("action"))) printDocument(data);
                     } catch (Exception error) { toast(error.getMessage()); }
@@ -162,7 +165,7 @@ public class MainActivity extends Activity {
         if (!restoring) {
             boolean smoke = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
                 && getIntent().getBooleanExtra("aawNativeSmoke", false);
-            if (smoke) web.loadDataWithBaseURL(BASE+"native-fixture.html", "<!doctype html><title>AAW synthetic fixture</title>", "text/html", "UTF-8", null);
+            if (smoke) web.loadDataWithBaseURL(BASE+"native-fixture.html", "<!doctype html><title>AAW synthetic fixture</title>", "text/html", "UTF-8", BASE+"native-fixture.html");
             else web.loadUrl(BASE);
         }
     }
