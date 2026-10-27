@@ -18,6 +18,14 @@ public final class NativePolicy {
                 && !uri.getPath().contains("/../");
         } catch (Exception invalid) { return false; }
     }
+    public static boolean trustedOrigin(String value) {
+        try {
+            URI uri = new URI(value);
+            return "https".equalsIgnoreCase(uri.getScheme()) && "arifagroworks.github.io".equalsIgnoreCase(uri.getHost())
+                && uri.getUserInfo() == null && (uri.getPort() == -1 || uri.getPort() == 443)
+                && (uri.getPath() == null || uri.getPath().isEmpty() || "/".equals(uri.getPath()));
+        } catch (Exception invalid) { return false; }
+    }
     public static String fileName(String value) {
         String name = value == null ? "" : value.replaceAll("[\\p{Cntrl}/\\\\:*?\"<>|]", "_").trim();
         while (name.startsWith(".")) name = name.substring(1);

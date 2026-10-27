@@ -91,7 +91,7 @@ public class MainActivity extends Activity {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             WebViewCompat.addWebMessageListener(web, "AAWNative", Collections.singleton(NativePolicy.ORIGIN),
                 (view, message, origin, mainFrame, reply) -> {
-                    if (!NativePolicy.trusted(view.getUrl()) || !NativePolicy.ORIGIN.equals(origin.toString())) return;
+                    if (!NativePolicy.trusted(view.getUrl()) || !NativePolicy.trustedOrigin(origin.toString())) return;
                     try {
                         String payload = message.getData();
                         if (payload == null || payload.length() > NativePolicy.MAX_BYTES * 2) throw new Exception("Document is too large.");

@@ -135,10 +135,9 @@ jobs:
           disable-animations: true
           script: |
             adb shell settings put system system_locales en-US
-            cd android-app
-            gradle --no-daemon connectedDebugAndroidTest
-            mkdir -p ../native-artifacts
-            adb pull /sdcard/Download ../native-artifacts/Download
+            gradle --no-daemon -p android-app connectedDebugAndroidTest
+            mkdir -p native-artifacts
+            adb pull /sdcard/Download native-artifacts/Download
       - name: Validate synthetic printed PDF text
         run: |
           sudo apt-get update -qq
