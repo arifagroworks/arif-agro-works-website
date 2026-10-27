@@ -7,6 +7,22 @@ android {
     namespace 'com.arifagroworks.combined'
     compileSdk 35
 
+    signingConfigs {
+        release {
+            if (System.getenv('AAW_KEYSTORE_PATH')) {
+                storeFile file(System.getenv('AAW_KEYSTORE_PATH'))
+                storePassword System.getenv('AAW_RELEASE_STORE_PASSWORD')
+                keyAlias System.getenv('AAW_RELEASE_KEY_ALIAS')
+                keyPassword System.getenv('AAW_RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+        }
+    }
     defaultConfig {
         applicationId 'com.arifagroworks.combined'
         minSdk 24
@@ -24,4 +40,13 @@ dependencies {
     androidTestImplementation 'androidx.test:rules:1.6.1'
     androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.3.0'
     androidTestImplementation 'junit:junit:4.13.2'
+}
+
+// A release must never silently fall back to an unsigned/debug APK.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { task -> task.name.toLowerCase().contains('release') && (task.name.toLowerCase().contains('assemble') || task.name.toLowerCase().contains('bundle') || task.name.toLowerCase().contains('package') || task.name.toLowerCase().contains('sign')) }) {
+        ['AAW_KEYSTORE_PATH','AAW_RELEASE_STORE_PASSWORD','AAW_RELEASE_KEY_ALIAS','AAW_RELEASE_KEY_PASSWORD'].each { name ->
+            if (!System.getenv(name)) throw new GradleException('Release signing is not configured: ' + name)
+        }
+    }
 }

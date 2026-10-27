@@ -1,6 +1,7 @@
 name: Build ARIF AGRO WORKS APK
 
 on:
+  workflow_call:
   workflow_dispatch:
   pull_request:
   push:
