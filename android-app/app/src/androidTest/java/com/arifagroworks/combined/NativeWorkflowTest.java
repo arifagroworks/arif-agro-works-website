@@ -61,7 +61,7 @@ public class NativeWorkflowTest {
         CountDownLatch painted=new CountDownLatch(1);
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> activity.testWebView().postVisualStateCallback(1,new WebView.VisualStateCallback(){@Override public void onComplete(long id){painted.countDown();}}));
         assertTrue("Fixture painted",painted.await(10,TimeUnit.SECONDS));
-        JSONArray box=new JSONArray(js("(()=>{const r=document.querySelector('"+selector+"').getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2,innerWidth]})()"));
+        JSONArray box=new JSONArray(js("(()=>{const el=document.querySelector('"+selector+"'),r=el.getBoundingClientRect();return [r.x+(el.type==='file'?Math.min(30,r.width/4):r.width/2),r.y+r.height/2,innerWidth]})()"));
         int[] position=new int[3];
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {activity.testWebView().getLocationOnScreen(position);position[2]=activity.testWebView().getWidth();});
         double scale=position[2]/box.getDouble(2);
@@ -98,6 +98,11 @@ public class NativeWorkflowTest {
     @Test public void nativePrintSavesARealPdf() throws Exception {
         page("print");
         tap("button");
+        UiObject2 destination=device.wait(Until.findObject(By.res("com.android.printspooler","destination_spinner")),20000);
+        assertNotNull("System print destination selector",destination);destination.click();
+        UiObject2 pdf=findText("Save as PDF");
+        if(pdf==null)pdf=device.wait(Until.findObject(By.desc("Save as PDF")),5000);
+        assertNotNull("Select Save as PDF destination",pdf);pdf.click();
         UiObject2 print=device.wait(Until.findObject(By.res("com.android.printspooler","print_button")),20000);
         assertNotNull("System PDF print preview",print);for(int i=0;i<100&&!print.isEnabled();i++)SystemClock.sleep(100);assertTrue("Print button enabled",print.isEnabled());print.click();savePicker();SystemClock.sleep(2000);
         String listing=device.executeShellCommand("find /sdcard/Download -name '*.pdf' -type f");
