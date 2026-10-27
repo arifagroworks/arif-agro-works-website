@@ -2,6 +2,6 @@
 <resources>
     <style name="AppTheme" parent="AawBaseTheme">
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/aaw_logo</item>
-        <item name="android:windowSplashScreenBackground">#FFFFFF</item>
+        <item name="android:windowSplashScreenBackground">#F5F0DF</item>
     </style>
 </resources>

@@ -12,7 +12,7 @@ before(async () => {
   server = http.createServer((req, res) => {
     const file = path.resolve(root, '.' + new URL(req.url, 'http://localhost').pathname);
     if (!file.startsWith(root + path.sep)) { res.writeHead(403).end(); return; }
-    try { res.setHeader('Content-Type', file.endsWith('.html') ? 'text/html' : file.endsWith('.js') ? 'application/javascript' : 'application/octet-stream'); res.end(fs.readFileSync(file)); }
+    try { res.setHeader('Content-Type', file.endsWith('.html') ? 'text/html' : file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'application/octet-stream'); res.end(fs.readFileSync(file)); }
     catch { res.writeHead(404).end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -228,7 +228,7 @@ test('Native splash and Android 12+ startup use AAW branding, with no Android pl
   for(const file of fs.readdirSync(dir,{recursive:true}).filter(f=>/\.(xml|java)$/.test(f))) {
     assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/sym_def_app_icon/,file);
   }
-  assert.match(read('android-app/app/build.gradle'),/versionCode 3/);
+  assert.match(read('android-app/app/build.gradle'),/versionCode 4/);
 });
 test('Android viewport handles system bars and cutouts on current and older Android', () => {
   const java=read('android-app/app/src/main/java/com/arifagroworks/combined/MainActivity.java');
@@ -345,4 +345,54 @@ test('Food preview distributes paise exactly without a negative share',async()=>
   const shares=await page.locator('#result tr').evaluateAll(rows=>rows.slice(1).map(r=>Number(r.cells[2].textContent.replace(/[^0-9.-]/g,''))));
   assert.equal(shares.reduce((a,b)=>a+Math.round(b*100),0),2);assert.equal(Math.min(...shares),0);
  }finally{await context.close();}
+});
+
+for(const width of [360,768,1440]) {
+ test(`Approved Classic public design at ${width}px keeps contact and login links usable`,async()=>{
+  const {page,context,errors}=await openPage('/index.html',{width});
+  try {
+   await page.waitForFunction(()=>getComputedStyle(document.body).backgroundColor==='rgb(245, 240, 223)');
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+   assert.equal(await page.locator('.hero h1').innerText(),'FABRICATION\nSOLUTIONS');
+   assert.ok((await page.locator('a[href*="role=master"]').count())>0);
+   assert.ok((await page.locator('a[href*="role=incharge"]').count())>0);
+   assert.ok((await page.locator('a[href^="tel:"]').count())>0);
+   await page.locator('.aaw-lang-btn[data-lang="hi"]').click();
+   assert.match(await page.locator('.hero h1').innerText(),/फैब्रिकेशन/);
+   assert.equal(await page.locator('html').getAttribute('lang'),'hi');
+   if(process.env.AAW_SCREENSHOTS){await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:`/tmp/aaw-public-${width}.png`,fullPage:true});}
+   assert.deepEqual(errors,[]);
+  }finally{await context.close()}
+ });
+ for(const role of ['master','incharge'])test(`Classic ${role} dashboard and navigation fit ${width}px`,async()=>{
+  const {page,context,errors}=await openPage(`/portal/index.html?role=${role}`,{width,role,sessionKey:`aaw-portal-auth-${role}`,demoWorkers:[{id:'w1',full_name:'Worker One',is_active:true},{id:'w2',full_name:'Inactive',is_active:false}]});
+  try{
+   await page.locator('.aaw-dashboard-stats').waitFor();
+   assert.equal(await page.locator('.aaw-dashboard-stats b').first().innerText(),'1');
+   assert.equal(await page.locator('[data-tab="dashboard"]').getAttribute('aria-current'),'page');
+   assert.equal(await page.locator('[data-tab="billing"]').count(),role==='master'?1:0);
+   assert.equal(await page.evaluate(()=>getComputedStyle(document.body).backgroundColor),'rgb(245, 240, 223)');
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+   if(process.env.AAW_SCREENSHOTS)await page.screenshot({path:`/tmp/aaw-${role}-${width}.png`,fullPage:true});
+   await page.locator('[data-open="attendance"]').click();
+   await page.locator('#content h2').filter({hasText:'Attendance'}).waitFor();
+   assert.equal(await page.locator('[data-tab="attendance"]').getAttribute('aria-current'),'page');
+   await page.locator('[data-tab="workers"]').click();
+   await page.locator('#form').waitFor();
+   assert.deepEqual(errors,[]);
+  }finally{await context.close()}
+ });
+}
+test('Username normalization preserves existing email accounts and supports incharge usernames',()=>{
+ const source=read('portal/index.html');
+ const fn=source.match(/function loginEmail\(value\)\{[\s\S]*?\n\}/)[0];
+ const ctx=vm.createContext({});vm.runInContext(fn,ctx);
+ assert.equal(vm.runInContext("loginEmail('  SITE01  ')",ctx),'site01@incharge.arifagroworks.local');
+ assert.equal(vm.runInContext("loginEmail('admin@example.com')",ctx),'admin@example.com');
+});
+test('Classic branding matches native splash, Android 12 launch and WebView background',()=>{
+ assert.match(read('android-app/app/src/main/res/layout/activity_splash.xml'),/android:background="#F5F0DF"/);
+ assert.match(read('android-app/app/src/main/res/values-v31/styles.xml'),/windowSplashScreenBackground">#F5F0DF/);
+ assert.match(read('android-app/app/src/main/java/com/arifagroworks/combined/MainActivity.java'),/web.setBackgroundColor\(Color.rgb\(245, 240, 223\)\)/);
+ for(const name of ['index.html','food-v518-fixed.html','AAW_Billing_Studio_Final.html','AAW_Daily_Production_V526_Restore_Test.html','incharge-test-fixed.html','site-assignment-test.html','incharge-access-test.html','salary-test.html','AAW_Site_Backup_Master.html','v519-guard-check.html'])assert.match(read('portal/'+name),/aaw-design.css\?v=20261027A/,name);
 });

@@ -55,7 +55,8 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
 
         FrameLayout viewport = new FrameLayout(this);
-        viewport.setBackgroundColor(Color.WHITE);
+        viewport.setBackgroundColor(Color.rgb(245, 240, 223));
+        web.setBackgroundColor(Color.rgb(245, 240, 223));
         viewport.addView(web, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         protectInsets(viewport);

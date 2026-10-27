@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:background="#FFFFFF">
+    android:background="#F5F0DF">
 
     <ImageView
         android:layout_width="120dp"
@@ -19,7 +19,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
         android:text="ARIF AGRO WORKS"
-        android:textColor="#166534"
+        android:textColor="#30391F"
         android:textSize="22sp"
         android:textStyle="bold" />
 
