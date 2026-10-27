@@ -105,8 +105,16 @@ public class NativeWorkflowTest {
         assertNotNull("Select Save as PDF destination",pdf);pdf.click();
         UiObject2 print=device.wait(Until.findObject(By.res("com.android.printspooler","print_button")),20000);
         assertNotNull("System PDF print preview",print);for(int i=0;i<100&&!print.isEnabled();i++)SystemClock.sleep(100);assertTrue("Print button enabled",print.isEnabled());print.click();savePicker();SystemClock.sleep(2000);
-        String listing=device.executeShellCommand("find /sdcard/Download -name '*.pdf' -type f");
-        assertTrue("Saved PDF exists",listing.contains(".pdf"));
+        // DocumentsUI may default to shared-storage root instead of Downloads.
+        String savedPdf=null,listing="";
+        for(int i=0;i<50&&savedPdf==null;i++){
+            listing=device.executeShellCommand("find /sdcard/ -iname '*.pdf' -type f");
+            for(String line:listing.split("\\n"))if(line.startsWith("/sdcard/")&&line.endsWith("/AAW-Print-Test.pdf")){savedPdf=line;break;}
+            if(savedPdf==null)SystemClock.sleep(200);
+        }
+        assertNotNull("System-saved synthetic PDF exists: "+listing,savedPdf);
+        device.executeShellCommand("mkdir -p /sdcard/Download");
+        device.executeShellCommand("cp \""+savedPdf+"\" /sdcard/Download/AAW-native-printed.pdf");
     }
     @Test public void backNavigationAndKeyboardKeepTheAppUsable() throws Exception {
         page("navigation");
