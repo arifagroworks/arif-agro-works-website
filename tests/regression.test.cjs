@@ -12,7 +12,7 @@ before(async () => {
   server = http.createServer((req, res) => {
     const file = path.resolve(root, '.' + new URL(req.url, 'http://localhost').pathname);
     if (!file.startsWith(root + path.sep)) { res.writeHead(403).end(); return; }
-    try { res.setHeader('Content-Type', file.endsWith('.html') ? 'text/html' : 'application/octet-stream'); res.end(fs.readFileSync(file)); }
+    try { res.setHeader('Content-Type', file.endsWith('.html') ? 'text/html' : file.endsWith('.js') ? 'application/javascript' : 'application/octet-stream'); res.end(fs.readFileSync(file)); }
     catch { res.writeHead(404).end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -49,9 +49,10 @@ async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-ma
         },
         from(table) {
           window.mockCalls.push(table);
-          const data = table === 'staff_profiles' ? { role, full_name: 'Demo Staff' }
-            : table === 'sites' ? [{ id: 'demo-site', site_name: 'Demo Site', is_active: true }] : [];
+          let data = table === 'staff_profiles' ? { role, full_name: 'Demo Staff' }
+            : table === 'sites' ? [{ id: 'demo-site', site_name: 'Demo Site', is_active: true }] : table === 'site_assignments' ? [{site_id:'demo-site',user_id:'demo-user'}] : [];
           const q = new Proxy({}, { get(_target, method) {
+            if (method === 'eq') return (key, value) => { if (table === 'staff_profiles' && key === 'role' && value === 'incharge') data = []; return q; };
             if (method === 'then') return resolve => resolve({ data, error: null });
             if (['insert', 'update', 'delete', 'upsert'].includes(method)) throw Error('Unexpected database mutation in regression test');
             return () => q;
@@ -67,7 +68,7 @@ async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-ma
     if (requestUrl.startsWith(origin + '/')) return route.continue();
     external.push(requestUrl);
     // The SDK is supplied by addInitScript; never download remote code.
-    if (/supabase.*\.js/.test(requestUrl)) return route.fulfill({ contentType: 'application/javascript', body: '' });
+    if (/cdn\.jsdelivr\.net\/npm\/@supabase\//.test(requestUrl) || /supabase.*\.js/.test(requestUrl)) return route.fulfill({ contentType: 'application/javascript', body: '' });
     return route.abort();
   });
   await page.goto(origin + url);
@@ -214,7 +215,76 @@ test('Food blocks misleading amounts when imported periods overlap', async () =>
   } finally { await context.close(); }
 });
 test('Active entry pages contain valid JavaScript', () => {
-  for (const file of ['index.html','portal/index.html','portal/food-v518-fixed.html','portal/AAW_Billing_Studio_Final.html']) {
+  for (const file of ['index.html','portal/index.html','portal/food-v518-fixed.html','portal/AAW_Billing_Studio_Final.html','portal/AAW_Daily_Production_V526_Restore_Test.html','portal/incharge-test-fixed.html','portal/site-assignment-test.html','portal/incharge-access-test.html','portal/salary-test.html','portal/AAW_Site_Backup_Master.html','portal/v519-guard-check.html']) {
     for (const match of read(file).matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) new vm.Script(match[1], {filename:file});
   }
+});
+
+test('Native splash and Android 12+ startup use AAW branding, with no Android placeholder resources', () => {
+  const splash=read('android-app/app/src/main/res/layout/activity_splash.xml');
+  assert.match(splash,/android:src="@drawable\/aaw_logo"/);
+  assert.match(read('android-app/app/src/main/res/values-v31/styles.xml'),/windowSplashScreenAnimatedIcon">@drawable\/aaw_logo/);
+  const dir=path.join(root,'android-app/app/src/main');
+  for(const file of fs.readdirSync(dir,{recursive:true}).filter(f=>/\.(xml|java)$/.test(f))) {
+    assert.doesNotMatch(fs.readFileSync(path.join(dir,file),'utf8'),/sym_def_app_icon/,file);
+  }
+  assert.match(read('android-app/app/build.gradle'),/versionCode 3/);
+});
+test('Android viewport handles system bars and cutouts on current and older Android', () => {
+  const java=read('android-app/app/src/main/java/com/arifagroworks/combined/MainActivity.java');
+  assert.match(java,/WindowInsets.Type.systemBars\(\)/);
+  assert.match(java,/WindowInsets.Type.displayCutout\(\)/);
+  assert.match(java,/getSystemWindowInsetTop/);
+  assert.match(java,/protectInsets\(viewport\)/);
+});
+for(const role of ['master','incharge']) {
+  test(`Daily Production shares ${role} session and preserves authorized site`, async () => {
+    const {page,context,errors}=await openPage(`/portal/AAW_Daily_Production_V526_Restore_Test.html?role=${role}&site_id=demo-site`,{role,sessionKey:`aaw-portal-auth-${role}`});
+    try {
+      await page.locator('#f').waitFor({state:'visible'});
+      assert.equal(await page.evaluate(()=>window.mockAuthKey),`aaw-portal-auth-${role}`);
+      assert.equal(await page.locator('#site').inputValue(),'demo-site');
+      assert.equal(await page.locator('#site').isDisabled(),true);
+      assert.deepEqual(errors,[]);
+    }finally{await context.close();}
+  });
+}
+test('Daily Production refuses a wrong-role session before querying sites',async()=>{
+  const {page,context}=await openPage('/portal/AAW_Daily_Production_V526_Restore_Test.html?role=master',{role:'incharge'});
+  try{
+    await page.waitForFunction(()=>document.getElementById('authError').textContent.includes('Access denied'));
+    assert.equal(await page.locator('#f').isVisible(),false);
+    assert.deepEqual(await page.evaluate(()=>window.mockCalls),['staff_profiles']);
+  }finally{await context.close();}
+});
+const masterPages=[
+ ['incharge-test-fixed.html','#dashboard'],['site-assignment-test.html','#app'],
+ ['incharge-access-test.html',null],['salary-test.html','#app'],
+ ['AAW_Site_Backup_Master.html','#tools'],['v519-guard-check.html','#run']
+];
+for(const [file,ready] of masterPages){
+  test(`${file} reuses Master session`,async()=>{
+    const {page,context,errors}=await openPage('/portal/'+file+'?role=master');
+    try{
+      await page.waitForFunction(()=>window.mockCalls.includes('staff_profiles'));
+      if(ready)await page.locator(ready).waitFor({state:'visible'});
+      if(file==='v519-guard-check.html')assert.equal(await page.locator('#run').isEnabled(),true);
+      assert.equal(await page.evaluate(()=>window.mockAuthKey),'aaw-portal-auth-master');
+      assert.deepEqual(errors,[]);
+    }finally{await context.close();}
+  });
+  test(`${file} refuses Incharge profile before loading sensitive records`,async()=>{
+    const {page,context}=await openPage('/portal/'+file+'?role=incharge',{role:'incharge',sessionKey:'aaw-portal-auth-incharge'});
+    try{
+      await page.waitForFunction(()=>window.mockCalls.includes('staff_profiles'));
+      assert.deepEqual(await page.evaluate(()=>window.mockCalls),['staff_profiles']);
+      if(ready&&file!=='v519-guard-check.html')assert.equal(await page.locator(ready).isVisible(),false);
+      if(file==='v519-guard-check.html')assert.equal(await page.locator('#run').isEnabled(),false);
+    }finally{await context.close();}
+  });
+}
+test('Billing supports a direct portal Master session without borrowing another key',async()=>{
+ const {page,context}=await openPage('/portal/AAW_Billing_Studio_Final.html?role=direct',{sessionKey:'aaw-portal-auth-direct'});
+ try{await page.waitForFunction(()=>!document.getElementById('aawGate'));assert.equal(await page.evaluate(()=>window.mockAuthKey),'aaw-portal-auth-direct');}
+ finally{await context.close();}
 });

@@ -266,19 +266,19 @@ function masterTools(){
     ['Incharge Management','incharge-test-fixed.html','Verified fixed listing · create accounts and reset passwords'],
     ['Site Assignment','site-assignment-test.html','Assign or change the site allocated to an incharge'],
     ['Incharge Access Control','incharge-access-test.html','Disable, enable and manage incharge login access'],
-    ['Food Management','food-v518-fixed.html?role='+encodeURIComponent(expectedRole||'direct'),'Active workers only for new food entries; historical records preserved'],
+    ['Food Management','food-v518-fixed.html','Active workers only for new food entries; historical records preserved'],
     ['Salary Reconciliation','salary-test.html','Review calculations without creating salary payments'],
     ['Salary Guard Check','v519-guard-check.html','Run authenticated Master Admin guard diagnostic; no payment is retained']
   ];
   $('content').innerHTML='<h2>Master Admin Tools</h2><p class="muted">Separate secured test pages. No production deployment or database changes from these shortcuts.</p>'+
-    links.map(([name,path,desc])=>`<div class="card"><h3>${esc(name)}</h3><p class="muted">${esc(desc)}</p><a style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px 14px;border-radius:8px;max-width:100%;overflow-wrap:anywhere" href="${encodeURI(path)}" target="_blank" rel="noopener noreferrer">Open ${esc(name)} ↗</a></div>`).join('')+
+    links.map(([name,path,desc])=>`<div class="card"><h3>${esc(name)}</h3><p class="muted">${esc(desc)}</p><a style="display:inline-block;background:#ff752e;color:#102330;font-weight:bold;text-decoration:none;padding:12px 14px;border-radius:8px;max-width:100%;overflow-wrap:anywhere" href="${encodeURI(path)}?role=${encodeURIComponent(expectedRole||'direct')}" target="_blank" rel="noopener noreferrer">Open ${esc(name)} ↗</a></div>`).join('')+
     '<p class="muted">Note: Username is not shown when the source record has no username field. This does not affect the existing account. Live V5.8 remains unchanged. Salary payment saves are disabled in this test portal until the database guard is verified with an active test worker.</p>';
 }
 
 function productionPanel(site){
   const selected=sites.find(s=>String(s.id)===String(site));
   const siteName=selected?.name||selected?.site_name||'Selected Site';
-  const productionUrl='AAW_Daily_Production_V526_Restore_Test.html?site_id='+encodeURIComponent(String(site));
+  const productionUrl='AAW_Daily_Production_V526_Restore_Test.html?site_id='+encodeURIComponent(String(site))+'&role='+encodeURIComponent(expectedRole||'direct');
   $('content').innerHTML=`<h2>Daily Production · V5.34</h2>
   <p class="muted">${esc(siteName)} · Secure Supabase Production Register. The V5.26 production page independently verifies the signed-in account and assigned sites. Production entry and report are locked to this selected site. Switch sites using the main portal selector.</p>
   <div class="card">
@@ -294,7 +294,7 @@ function billingPanel(){
     $('content').textContent='Master Admin only';
     return;
   }
-  const url='AAW_Billing_Studio_Final.html';
+  const url='AAW_Billing_Studio_Final.html?role='+encodeURIComponent(expectedRole||'direct');
   $('content').innerHTML=`<h2>Company Documents & Billing Studio</h2>
   <p class="muted">Master Admin workspace · Approved Blue + White Corporate design. Letterhead, Invoice, Quotation, Work Proforma and Measurement Bill.</p>
   <div class="card"><div class="actions"><a href="${url}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:800;padding:12px 15px;border-radius:8px;text-decoration:none">Open Billing Studio Full Screen ↗</a></div>

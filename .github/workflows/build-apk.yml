@@ -85,6 +85,13 @@ jobs:
           grep -q "package: name='com.arifagroworks.combined'" apk-badging.txt
           grep -q "launchable-activity: name='com.arifagroworks.combined.MainActivity'" apk-badging.txt
           unzip -l "$APK" | grep 'res/drawable/aaw_logo.png'
+          "$AAPT" dump xmltree "$APK" res/layout/activity_splash.xml > apk-splash.txt
+          grep -q 'android:src' apk-splash.txt
+          if grep -q 'sym_def_app_icon' apk-splash.txt; then exit 1; fi
+          "$AAPT" dump resources "$APK" > apk-resources.txt
+          ICON_ID=$(python3 -c 'import re; s=open("apk-resources.txt").read(); print(re.search(r"resource (0x[0-9a-f]+) [^\n]*:drawable/aaw_logo:", s).group(1))')
+          grep -q "android:src.*@$ICON_ID" apk-splash.txt
+          "$AAPT" dump badging "$APK" | grep "versionName='1.2'"
           ls -lh "$APK"
 
       - name: Upload APK
