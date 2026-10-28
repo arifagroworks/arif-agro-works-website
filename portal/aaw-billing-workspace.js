@@ -11,7 +11,7 @@ function sanitize(html){
   if(!allowed.has(el.tagName)){el.replaceWith(...el.childNodes);continue;}
   const style=el.style;const clean=[];
   for(const key of ['color','background-color']){const val=style.getPropertyValue(key);if(/^(#[\da-f]{3,8}|rgba?\([\d\s.,%]+\)|[a-z]+)$/i.test(val))clean.push(key+':'+val+'!important');}
-  const rules={'text-align':/^(left|right|center|justify)$/,'font-family':/^(Arial|Georgia|Verdana|Tahoma|Times New Roman|Courier New)(,\s*(serif|sans-serif|monospace))?$/i,'font-size':/^(\d{1,2}(px|pt)|(?:small|medium|large|x-large|xx-large))$/,'font-weight':/^(bold|normal|[1-9]00)$/,'font-style':/^(italic|normal)$/,'text-decoration-line':/^(underline|line-through|none|underline line-through)$/,'line-height':/^(1|1\.15|1\.5|1\.8|2)$/,'padding-left':/^(\d{1,2}px)$/,'margin-left':/^(\d{1,2}px)$/};
+  const rules={'text-align':/^(left|right|center|justify)$/,'font-family':/^(Arial|Georgia|Verdana|Tahoma|Times New Roman|Courier New)(,\s*(serif|sans-serif|monospace))?$/i,'font-size':/^(\d{1,2}(px|pt)|(?:small|medium|large|x-large|xx-large|xxx-large|-webkit-xxx-large))$/,'font-weight':/^(bold|normal|[1-9]00)$/,'font-style':/^(italic|normal)$/,'text-decoration-line':/^(underline|line-through|none|underline line-through)$/,'line-height':/^(1|1\.15|1\.5|1\.8|2)$/,'padding-left':/^(\d{1,2}px)$/,'margin-left':/^(\d{1,2}px)$/};
   for(const [key,re] of Object.entries(rules)){const val=key==='font-family'?style.getPropertyValue(key).replace(/["']/g,''):style.getPropertyValue(key);if(re.test(val))clean.push(key+':'+val);}
   const attrs={};
   if(el.tagName==='FONT'){
@@ -76,8 +76,8 @@ let cleanSnapshot='';const snapshot=()=>JSON.stringify({...collect(),id:null,upd
 let dirty=false;function updateDirty(){dirty=cleanSnapshot!==snapshot();dirtyStatus.textContent=dirty?'Unsaved changes':'No unsaved changes';dirtyStatus.dataset.dirty=String(dirty);}
 const baseRender=render;render=function(){baseRender();const letter=v('type')==='letterhead';document.body.classList.toggle('billing-is-letter',letter);byId('billingDockTotal').textContent=letter?'Letterhead':byId('grand').textContent;byId('billingDockSave').disabled=!aawCloudReady;if(cleanSnapshot)updateDirty();};
 const statusBase=aawStatus;aawStatus=function(message,state){statusBase(message,state);byId('billingDockSave').disabled=!aawCloudReady;};
-const baseNew=newDoc;newDoc=function(){if(dirty&&!confirm('Discard unsaved changes and start a new document?'))return; baseNew();cleanSnapshot=snapshot();updateDirty();setStage('details');};
-const baseLoad=cloudLoad;cloudLoad=function(id){if(dirty&&!confirm('Discard unsaved changes and open this document?'))return;baseLoad(id);cleanSnapshot=snapshot();updateDirty();setStage('details');};
+const baseNew=newDoc;newDoc=function(){if(dirty&&!confirm('Discard unsaved changes and start a new document?'))return false; baseNew();byId('date').value=new Date().toLocaleDateString('en-CA');cleanSnapshot=snapshot();updateDirty();setStage('details');return true;};
+const baseLoad=cloudLoad;cloudLoad=function(id){if(dirty&&!confirm('Discard unsaved changes and open this document?'))return false;baseLoad(id);cleanSnapshot=snapshot();updateDirty();setStage('details');return true;};
 const baseSave=cloudSave;cloudSave=async function(){const before=snapshot();const ok=await baseSave();if(ok&&snapshot()===before){cleanSnapshot=snapshot();updateDirty();dirtyStatus.textContent='Saved online · '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});}return ok;};
 form.addEventListener('input',()=>updateDirty());form.addEventListener('change',()=>updateDirty());window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 // Preserve selected text when interacting with toolbar controls.
@@ -92,7 +92,7 @@ function tool(label,cmd,value){const b=document.createElement('button');b.type='
 for(const [label,cmd,val] of [['Undo','undo'],['Redo','redo'],['Bold','bold'],['Italic','italic'],['Underline','underline'],['Strike','strikeThrough'],['Left','justifyLeft'],['Center','justifyCenter'],['Right','justifyRight'],['Justify','justifyFull'],['Bullets','insertUnorderedList'],['Numbering','insertOrderedList'],['Indent','indent'],['Outdent','outdent'],['Clear format','removeFormat'],['Rule','insertHorizontalRule']])tool(label,cmd,val);
 function selectTool(label,values,fn){const wrap=document.createElement('label');wrap.textContent=label;const select=document.createElement('select');select.setAttribute('aria-label',label);for(const [text,val]of values){const o=document.createElement('option');o.textContent=text;o.value=val;select.append(o);}select.onchange=()=>fn(select.value);wrap.append(select);ribbon.append(wrap);return select;}
 selectTool('Font',[['Arial','Arial'],['Georgia','Georgia'],['Times New Roman','Times New Roman'],['Verdana','Verdana'],['Courier New','Courier New']],val=>command('fontName',val));
-selectTool('Size',[['10','2'],['12','3'],['14','4'],['18','5'],['24','6'],['32','7']],val=>command('fontSize',val)).value='3';
+selectTool('Size',[['10','2'],['12','3'],['14','4'],['18','5'],['24','6'],['36','7']],val=>command('fontSize',val)).value='3';
 selectTool('Paragraph',[['Normal','p'],['Heading 1','h1'],['Heading 2','h2'],['Heading 3','h3']],val=>command('formatBlock',val));
 selectTool('Line spacing',[['1.5','1.5'],['1','1'],['1.15','1.15'],['1.8','1.8'],['2','2']],val=>{restore();const s=getSelection();let el=s.anchorNode?.nodeType===1?s.anchorNode:s.anchorNode?.parentElement;while(el&&el.parentElement!==editor&&!['P','DIV','LI','TD','TH','H1','H2','H3'].includes(el.tagName))el=el.parentElement;if(el&&editor.contains(el)&&el!==editor)el.style.lineHeight=val;else {for(const child of editor.children)child.style.lineHeight=val;}changed();});
 for(const [label,cmd,value]of [['Text colour','foreColor','#30391f'],['Highlight','hiliteColor','#f2eed5']]){const l=document.createElement('label');l.textContent=label;const input=document.createElement('input');input.type='color';input.value=value;input.setAttribute('aria-label',label);input.oninput=()=>command(cmd,input.value);l.append(input);ribbon.append(l);}
@@ -110,5 +110,6 @@ const words=document.createElement('p');words.className='muted';words.id='letter
 const renderSafe=render;render=function(){renderSafe();if(v('type')==='letterhead'){const content=byId('preview').querySelector('[style*="min-height:420px"]');if(content)content.innerHTML=sanitize(editor.innerHTML);}};
 const initialList=cloudList;let initialized=false;cloudList=async function(){await initialList();if(!initialized){initialized=true;cleanSnapshot=snapshot();updateDirty();}render();};
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();if(aawCloudReady)cloudSave();}});
+window.AAWBillingWorkspace={setBaseline(){cleanSnapshot=snapshot();updateDirty();}};
 cleanSnapshot=snapshot();render();
 })();
