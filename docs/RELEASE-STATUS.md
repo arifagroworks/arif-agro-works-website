@@ -26,7 +26,7 @@ The owner configured all four signing secrets. [Android Release run 40642513179]
 
 Remaining owner Auth setting: Supabase leaked-password protection remains an owner Auth/plan setting; the connector cannot update Auth configuration. No paid upgrade was performed. See [owner setup](OWNER-RELEASE-SETUP.md).
 
-No production business records were inserted, changed, deleted or reset during this closeout. The site export tool remains read-only; destructive bulk deletion stays locked by design.
+No production business records were inserted, changed, deleted or reset during this closeout. At that closeout, site exports were read-only and bulk deletion remained locked. The owner separately authorized the guarded site-record Hard Delete upgrade below on 28 October.
 
 ## Explicitly postponed
 
@@ -45,3 +45,11 @@ Isolated browser tests cover real input retention, mobile/desktop layout, letter
 Master Billing Studio now includes browser-local RA PDF/photo/text import, reviewed work rows, exact paise arithmetic, IGST or separately rounded CGST/SGST, additional GST invoice particulars, and current-draft verification before saving/printing. Imported current-period quantities cannot deduct previous certified work twice. Source amount mismatches above ₹1 block preparation; smaller rounding differences require review. OCR readings remain subject to the owner's source check.
 
 Read [RA invoice import](RA-INVOICE-IMPORT.md) for supported layouts, privacy, limits and the workflow. The uploaded real examples were used only in local reading verification; no example business invoice was saved and no customer source images/signatures were committed. The tax-head function migration is applied and verified on the existing backend; legacy calculations and business rows remain unchanged. Local full regression suite passed 161 tests, plus real image-OCR and synthetic PDF.js reading checks outside production.
+
+## Owner-authorized site-record Hard Delete
+
+Site Backup now exports daily Food attendance and operational audit alongside the earlier mapped tables (18 in total). Hard Delete is a separate Master-only workflow backed by a server-consistent 16-table business-record recovery archive. It retains site configuration, logins/assignments, production/operational audit and a private archive. It removes selected-site workers, transactions, invoices, invoice history and payments only after the saved recovery JSON is reselected, the exact site name and reason are entered, and two server-enforced 8-second confirmations complete. No app Undo or automatic restore is claimed.
+
+Private request/transaction-context tables have RLS and no client table privileges. Invoker RPC wrappers call explicitly granted private definer implementations, which recheck active Master access and request ownership. Expired/replayed/stale requests, changed records, mismatched archives, unknown dependent tables and cross-site links fail closed. All deletes and the audit receipt commit together or roll back. Normal final Food and paid payroll guards remain active outside the dedicated transaction. Installing the migration does not delete business records.
+
+Validation includes isolated PostgreSQL authorization/delay/archive/stale-record/dependency/rollback cases, typed recovery JSON roundtrips and browser tests for recovery-file saving/reselection, cancellation, site changes and mobile/desktop layout. Local tests use only synthetic data. No live site reset or record deletion was performed to validate the feature.

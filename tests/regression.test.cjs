@@ -621,3 +621,34 @@ test('RA file reading fails safely and cancelling a new draft preserves an exist
  page.on('dialog',d=>d.dismiss());await page.locator('.toolbar button').filter({hasText:'+ New Document'}).click();assert.equal(await page.locator('#letterbody').textContent(),'Keep my unsaved letter');assert.equal(await page.locator('#type').inputValue(),'letterhead');assert.deepEqual(errors,[]);
  }finally{await context.close();}
 });
+
+for(const width of [360,1440])test(`Site Hard Delete requires matching saved file, both timed confirmations and final consent at ${width}px`,async()=>{
+ const {page,context,errors}=await openPage('/portal/AAW_Site_Backup_Master.html',{width});
+ try{
+  await page.locator('#tools').waitFor({state:'visible'});await page.waitForFunction(()=>!document.getElementById('deletePrepare').disabled);
+  await page.clock.install();
+  const archive='{"format":"AAW-site-recovery-v1","site":{"id":"demo-site","site_name":"Demo Site"},"data":{"workers":[]}}';
+  await page.evaluate(archive=>{window.deleteCalls=[];db.rpc=async(name,args)=>{deleteCalls.push({name,args});if(name==='aaw_prepare_site_delete')return {data:{request_id:'demo-request',site_id:'demo-site',site_name:'Demo Site',digest:'a'.repeat(64),archive_text:archive,counts:{workers:2,worker_attendance:5},wait_seconds:8},error:null};if(name==='aaw_confirm_site_delete')return{data:{wait_seconds:8},error:null};if(name==='aaw_execute_site_delete')return{data:{deleted:true,site_name:'Demo Site'},error:null};throw Error('Unexpected RPC');};},archive);
+  await page.locator('#deletePrepare').click();await page.locator('#deletePreview h3').waitFor();
+  assert.ok(await page.locator('#deleteConfirm1').isDisabled());
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  const downloadEvent=page.waitForEvent('download');await page.locator('#deleteDownload').click();const download=await downloadEvent;assert.match(download.suggestedFilename(),/RECOVERY/);assert.equal(fs.readFileSync(await download.path(),'utf8'),archive);
+  await page.locator('#deleteFile').setInputFiles({name:'wrong.json',mimeType:'application/json',buffer:Buffer.from('{}')});await page.waitForFunction(()=>document.getElementById('deleteStatus').textContent.includes('matching recovery'));
+  await page.locator('#deletePhrase').fill('DELETE Demo Site');await page.locator('#deleteReason').fill('Reset synthetic demo');await page.clock.fastForward(8100);assert.ok(await page.locator('#deleteConfirm1').isDisabled());
+  await page.locator('#deleteFile').setInputFiles({name:'recovery.json',mimeType:'application/json',buffer:Buffer.from(archive)});await page.waitForFunction(()=>document.getElementById('deleteStatus').textContent.includes('verified'));
+  if(process.env.AAW_QA_DIR)await page.screenshot({path:path.join(process.env.AAW_QA_DIR,`site-delete-${width}.png`),fullPage:true});
+  await page.locator('#deleteConfirm1').click();await page.waitForFunction(()=>document.getElementById('deleteStatus').textContent.includes('First confirmation accepted'));
+  assert.ok(await page.locator('#deleteConfirm2').isDisabled());assert.equal(await page.evaluate(()=>deleteCalls.filter(x=>x.name==='aaw_execute_site_delete').length),0);
+  await page.clock.fastForward(8100);page.once('dialog',d=>d.dismiss());await page.locator('#deleteConfirm2').click();assert.equal(await page.evaluate(()=>deleteCalls.filter(x=>x.name==='aaw_execute_site_delete').length),0);
+  page.once('dialog',d=>d.accept());await page.locator('#deleteConfirm2').click();await page.waitForFunction(()=>document.getElementById('deleteStatus').textContent.includes('Hard Delete complete'));
+  const final=await page.evaluate(()=>deleteCalls.at(-1));assert.equal(final.name,'aaw_execute_site_delete');assert.equal(final.args.p_archive_text,archive);assert.equal(final.args.p_phrase,'DELETE Demo Site');assert.equal(final.args.p_digest,'a'.repeat(64));assert.ok(await page.locator('#deleteConfirm2').isDisabled());assert.deepEqual(errors,[]);
+ }finally{await context.close()}
+});
+test('Site Hard Delete invalidates a preview on site change and reports server refusal without deleting',async()=>{
+ const {page,context,errors}=await openPage('/portal/AAW_Site_Backup_Master.html');
+ try{
+  await page.locator('#tools').waitFor({state:'visible'});await page.waitForFunction(()=>!document.getElementById('deletePrepare').disabled);
+  await page.evaluate(()=>{db.rpc=async()=>({error:{message:'Active Master Admin access required'}})});await page.locator('#deletePrepare').click();await page.waitForFunction(()=>document.getElementById('deleteStatus').textContent.includes('Preparation blocked'));assert.ok(await page.locator('#deleteConfirm1').isDisabled());assert.ok(await page.locator('#deleteConfirm2').isDisabled());
+  await page.evaluate(()=>{document.getElementById('site').add(new Option('Other Site','other-site'));});await page.locator('#site').selectOption('other-site');assert.equal(await page.locator('#deletePreview').textContent(),'');assert.equal(await page.locator('#deletePhrase').inputValue(),'');assert.ok(await page.locator('#deleteDownload').isDisabled());assert.deepEqual(errors,[]);
+ }finally{await context.close()}
+});
