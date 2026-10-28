@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /arif-agro-works-website/
+Disallow: /arif-agro-works-website/portal/
+Disallow: /arif-agro-works-website/index-
+Disallow: /arif-agro-works-website/AAW_Public_
+Sitemap: https://arifagroworks.github.io/arif-agro-works-website/sitemap.xml

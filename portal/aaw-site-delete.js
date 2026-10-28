@@ -38,7 +38,7 @@ id('deletePrepare').onclick=async()=>{
   countdown(data.wait_seconds);message('Preview ready. Save the recovery JSON, then select that saved file below. Nothing has been deleted.');
  }catch(e){message('Preparation blocked: '+e.message)}finally{busy=false;controls()}
 };
-id('deleteDownload').onclick=()=>{if(plan)downloadBlob('AAW_'+plan.site_name.replace(/[^a-z0-9_-]/gi,'_')+'_RECOVERY_'+plan.request_id+'.json',plan.archive_text,'application/json');};
+id('deleteDownload').onclick=()=>{if(plan&&window.AAWNativeSupport&&new Blob([plan.archive_text]).size>12*1024*1024){message('Recovery file exceeds the APK 12 MB export limit. Open the portal in a browser to save this file.');return;}if(plan)downloadBlob('AAW_'+plan.site_name.replace(/[^a-z0-9_-]/gi,'_')+'_RECOVERY_'+plan.request_id+'.json',plan.archive_text,'application/json');};
 id('deleteFile').onchange=async()=>{
  archiveText='';controls();const current=generation,file=id('deleteFile').files[0];if(!file)return;
  try{if(file.size>20*1024*1024)throw Error('Recovery file exceeds 20 MB');const text=(await file.text()).replace(/^\uFEFF/,'');if(current!==generation)return;

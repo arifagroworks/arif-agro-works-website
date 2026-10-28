@@ -55,3 +55,15 @@ Private request/transaction-context tables have RLS and no client table privileg
 Validation includes isolated PostgreSQL authorization/delay/archive/stale-record/dependency/rollback cases, typed recovery JSON roundtrips and browser tests for recovery-file saving/reselection, cancellation, site changes and mobile/desktop layout. Local tests use only synthetic data. No live site reset or record deletion was performed to validate the feature.
 
 Production enabling migration `20261028115050_site_hard_delete` is applied. All 22 pre-existing public-table row counts and content signatures were unchanged after installation. Private request/context tables were empty; RLS, invoker wrapper grants, denied anonymous execution, denied client context writes and rejection without an active Master were verified. Advisor INFO notices for private RLS tables without policies are intentional default-deny; no client table grants or exposed private archive API were added.
+
+## Usability audit follow-ups - 28 October 2026
+
+Owner holds five-site account setup, physical-phone transaction trial, complete database restore verification and full AI/voice. No accounts or business transactions were created for those held tasks.
+
+Completed: server-side bill search across stored documents with 50-row pages, database-wide next-number suggestions and RA source checks; paginated worker/attendance reads and keyset bill-history export; new RA/Hard Delete Hindi labels and status text; explicit browser fallback for recovery exports above the native 12 MB limit; public description/canonical/Open Graph/Twitter/LocalBusiness metadata and sitemap; noindex on active portal pages. The supplied project robots file is a deployment reference: crawlers use host-root /robots.txt, which a project-path Pages repository cannot set. Portal noindex is supplied on the pages themselves; robots is not access control.
+
+Migration `20261028130107_usability_followups` is applied. Seven FK-covering indexes plus browse/source indexes and equivalent per-action policy OR consolidation remove the previously reported missing-FK-index, per-row Auth and multiple-permissive-policy findings. Existing financial/role guards remain. All 22 existing public-table row signatures were unchanged after deployment. Unused-index INFO findings are expected with the currently empty business tables; indexes were not removed.
+
+Master guide now covers Billing Studio, RA import, server search and guarded Hard Delete (5 pages). Incharge guide adds daily checks and file guidance (4 pages). New product design suggestions remain proposals; the approved visible palette/layout is preserved.
+
+Owner-only outstanding setting: leaked-password protection cannot be updated with the available connector and no owner Management API token is available. No paid upgrade was performed. Full restore, phone transaction certification, account setup, AI and voice remain held.

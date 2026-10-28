@@ -4,6 +4,7 @@ const uid=n=>'10000000-0000-0000-0000-'+String(n).padStart(12,'0');let db;
 async function scalar(sql,p=[]){return (await db.query(sql,p)).rows[0].v}
 async function as(n,fn){await db.exec('BEGIN;SET LOCAL ROLE authenticated');try{await db.query("select set_config('request.jwt.claim.sub',$1,true)",[uid(n)]);return await fn()}finally{await db.exec('ROLLBACK')}}
 before(async()=>{db=new PGlite();for(const p of ['tests/fixtures/backend-schema.sql','database/proposals/access-hardening.sql','supabase/migrations/20261027143748_aaw_ready_to_use_operations.sql','supabase/migrations/20261027144256_aaw_guard_transfer_window.sql'])await db.exec(fs.readFileSync(p,'utf8'));
+await db.exec(fs.readFileSync('supabase/migrations/'+fs.readdirSync('supabase/migrations').find(x=>x.endsWith('_usability_followups.sql')),'utf8'));
 await db.exec(`INSERT INTO auth.users(id,banned_until) VALUES ('${uid(1)}',null),('${uid(2)}',null),('${uid(3)}',null),('${uid(4)}','2099-01-01');
 INSERT INTO public.staff_profiles(user_id,full_name,role) VALUES ('${uid(1)}','Master','master'),('${uid(2)}','Incharge A','incharge'),('${uid(3)}','Incharge B','incharge'),('${uid(4)}','Disabled','incharge');
 INSERT INTO public.sites(id,site_name,is_active) VALUES ('${uid(10)}','Site A',true),('${uid(11)}','Site B',true);
