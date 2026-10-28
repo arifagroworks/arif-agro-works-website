@@ -7,7 +7,10 @@
 .billing-workspace .top h1{font-size:30px;letter-spacing:-.7px}
 .billing-workspace .toolbar{gap:10px}.billing-workspace button,.billing-workspace input,.billing-workspace select{min-height:42px}
 .billing-workspace button:focus-visible,.billing-workspace a:focus-visible,.billing-workspace summary:focus-visible{outline:3px solid #a7a16a;outline-offset:3px}
-.billing-more{position:relative}.billing-more summary,.billing-branding summary{cursor:pointer;font-weight:700;padding:12px;color:var(--bill-ink)}
+.billing-more{position:relative;min-width:0}.billing-more summary,.billing-branding summary{cursor:pointer;font-weight:700;padding:12px;color:var(--bill-ink)}
+.billing-more summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;border:1px solid var(--bill-line);border-radius:10px;background:#e8ead8;list-style:none;font-size:13px}
+.billing-more summary::-webkit-details-marker{display:none}.billing-more summary:after{content:'▾';flex-shrink:0}.billing-more[open] summary:after{content:'▴'}
+.billing-more:not([open])>div{display:none}.billing-more>div button{min-width:0;min-height:44px;white-space:normal;overflow-wrap:anywhere;text-align:left}
 .billing-more>div{position:absolute;z-index:20;right:0;top:100%;width:240px;padding:12px;background:#fffdf5;border:1px solid var(--bill-line);box-shadow:0 8px 28px #30391f22;border-radius:12px;display:grid;gap:8px}
 #billingDirtyStatus{font-size:12px;color:#4b6035}#billingDirtyStatus[data-dirty=true]{color:#86551b}
 .billing-tabs{display:flex;gap:8px;margin:18px 0;flex-wrap:wrap;scroll-margin-top:12px}.billing-tabs button{background:#e8ead8!important;color:var(--bill-ink)!important}.billing-tabs button[aria-current=true]{background:#48562c!important;color:white!important}
@@ -30,6 +33,7 @@
 @media(min-width:701px) and (max-width:1200px){.billing-workspace .layout{display:block}.billing-workspace aside{display:flex;height:auto;position:static;overflow:auto}.billing-grid{grid-template-columns:minmax(0,1fr)}.billing-workspace .billing-preview{position:static;max-height:none}.billing-workspace main{padding:16px}}
 @media(max-width:700px){
 .billing-workspace .layout{display:block}.billing-workspace aside{display:none}.billing-workspace main{padding:12px 12px 100px}.billing-workspace .top{padding:16px}.billing-workspace .top h1{font-size:26px}.billing-workspace .toolbar{gap:7px}.billing-workspace .toolbar>button{font-size:12px;padding:9px}.billing-workspace .toolbar #aawCloudStatus{order:10;flex-basis:100%;font-size:11px!important}#billingDirtyStatus{order:11;flex-basis:100%}
+.billing-workspace .billing-more{flex:1 0 100%;max-width:100%}.billing-workspace .billing-more>div{position:static;width:100%;margin-top:7px;box-shadow:none}.billing-workspace .billing-more>div button{width:100%;font-size:13px}
 .billing-grid{display:block}.billing-workspace .billing-preview{position:static;max-height:none;overflow:visible}.billing-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px}.billing-tabs button{font-size:12px;padding:10px 6px}.billing-workspace .notice.controls{display:none}
 .billing-workspace [data-stage]{display:none!important}
 .billing-workspace[data-billing-step=details] [data-stage=details],.billing-workspace[data-billing-step=items] [data-stage=items],.billing-workspace[data-billing-step=preview] [data-stage=preview],.billing-workspace[data-billing-step=saved] [data-stage=saved]{display:block!important}

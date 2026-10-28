@@ -501,6 +501,28 @@ for(const width of [360,1440])test(`Professional Billing workspace: real editing
  const {page,context,errors}=await openPage('/portal/AAW_Billing_Studio_Final.html',{width});
  try{
   await page.waitForFunction(()=>!document.getElementById('aawGate')).catch(async e=>{throw Error(JSON.stringify({errors,gate:await page.locator('#aawGate').textContent()}))});
+  // The APK uses this responsive page: expanded tools must not cover status or steps.
+  for(const language of ['en','hi']){
+   await page.evaluate(language=>AAWLanguage.setLanguage(language),language);
+   const more=page.locator('.billing-more'),panel=more.locator(':scope > div');
+   assert.equal(await panel.isVisible(),false);
+   await more.locator('summary').click();
+   assert.equal(await panel.locator('button:visible').count(),4);
+   const bounds=await panel.boundingBox();
+   assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width+1);
+   for(const button of await panel.locator('button').all()){
+    const box=await button.boundingBox();assert.ok(box.height>=44);
+    assert.ok(box.x>=bounds.x&&box.x+box.width<=bounds.x+bounds.width+1);
+   }
+   if(width<=700){
+    const status=await page.locator('#aawCloudStatus').boundingBox();
+    const steps=await page.locator('.billing-tabs').boundingBox();
+    assert.ok(bounds.y+bounds.height<=status.y+1);
+    assert.ok(bounds.y+bounds.height<=steps.y+1);
+   }
+   await more.locator('summary').click();assert.equal(await panel.isVisible(),false);
+  }
+  await page.evaluate(()=>AAWLanguage.setLanguage('en'));
   assert.equal(await page.locator('#letterbody').isVisible(),false);
   await page.locator('[data-step=items]').click();
   await page.locator('#items input[aria-label=Description]').fill('Custom fabrication');
