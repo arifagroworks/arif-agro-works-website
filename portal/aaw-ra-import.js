@@ -91,6 +91,6 @@ $('raPrepare').onclick=async()=>{if(mappingStale)return alert('Press Map This Bi
  $('aawBillStage').value='regular';$('aawPrevious').value='0';$('aawReceived').value='0';$('aawRetention').value='0';$('aawMeasurementSheet').checked=false;
  imported={version:1,reference:$('raRef').value.trim(),sourceName,sourceHash,quantityBasis:'this_bill',calculation:'line_paise_then_tax_head',sourceDifferences:result.warnings,reviewedAt:new Date().toISOString()};details.open=true;drawRows();render();status('GST invoice draft prepared. Complete site and GST particulars, then review and save. No cloud record has been created.');};
 window.addEventListener('pagehide',()=>{releasePreview();if(reader)reader.terminate();});
-window.AAWRAImport={issueError};
+window.AAWRAImport={issueError,restoreDraftMetadata:loadMeta};
 render();window.AAWBillingWorkspace.setBaseline();
 })();

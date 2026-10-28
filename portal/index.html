@@ -163,6 +163,10 @@ const tabs=[
 ['operations','Salary & Food Operations'],
 ['financials','Income & Expenses'],
 ['audit','History'],
+['profile','Worker Profile'],
+['receipts','Receipt Attachments'],
+['comparison','Site Comparison'],
+['enquiries','Enquiry Inbox'],
 ['mastertools','Master Tools']
 ];
 const config={
@@ -226,6 +230,7 @@ finally{b.disabled=false;b.textContent='Secure Login'}
 };
 $('logout').onclick=async()=>{
 await db.auth.signOut({scope:'local'});
+role='';workers=[];seq++;document.getElementById('inchargeBottom')?.remove();document.body.classList.remove('has-incharge-bottom');$('content').textContent='';
 $('app').classList.add('hide');
 $('login').classList.remove('hide');
 $('logout').classList.add('hide');
@@ -322,9 +327,10 @@ function dashboard(site,allowed){
  $('content').innerHTML=`<div class="aaw-welcome"><div><p class="muted">ARIF AGRO WORKS · ${esc(selected?.site_name||'')}</p><h2>Welcome to your workspace</h2></div><span class="badge">${esc(date())}</span></div>
  <div class="aaw-dashboard-stats"><div class="card">Active workers<b>${active}</b></div><div class="card">Assigned sites<b>${sites.length}</b></div><div class="card">Available modules<b>${allowed.length}</b></div><div class="card">Access level<b style="font-size:20px">${role==='master'?'Master Admin':'Site Incharge'}</b></div></div>
  <img class="aaw-dashboard-banner" src="../assets/industrial-hero.webp" alt="Welding and fabrication workshop">
- <h3>Quick actions</h3><div class="aaw-quick-grid">${quick.map(key=>`<button type="button" data-open="${key}"><span class="aaw-menu-icon" aria-hidden="true">${menuIcons[key]}</span>${esc(allowed.find(x=>x[0]===key)[1])}</button>`).join('')}</div>
+ <section id="todayWork" aria-live="polite">Loading pending work…</section><h3>Quick actions</h3><div class="aaw-quick-grid">${quick.map(key=>`<button type="button" data-open="${key}"><span class="aaw-menu-icon" aria-hidden="true">${menuIcons[key]}</span>${esc(allowed.find(x=>x[0]===key)[1])}</button>`).join('')}</div>
  <p class="muted">Choose a module to view saved records or add an entry for the selected site. Worker counts include active workers visible to your account.</p>`;
  $('content').querySelectorAll('[data-open]').forEach(button=>button.onclick=()=>{tab=button.dataset.open;edit=null;deleted=false;render()});
+ window.AAWWorkflows?.today(site);
 }
 
 function operationsPanel(site,section){
@@ -334,13 +340,13 @@ function operationsPanel(site,section){
 async function render(){
 let n=++seq,site=$('site').value;
 if(!site){$('content').textContent='No assigned sites';return}
-let allowed=tabs.filter(x=>role==='master'||!['summary','slip','financials','mastertools','billing','assistant'].includes(x[0]));
+let allowed=tabs.filter(x=>role==='master'||!['summary','slip','financials','mastertools','billing','assistant','comparison','enquiries'].includes(x[0]));
 if(!allowed.some(x=>x[0]===tab))tab='dashboard';
 $('tabs').innerHTML=allowed.map(x=>`<button data-tab="${x[0]}" class="${tab===x[0]?'active':''}" aria-current="${tab===x[0]?'page':'false'}"><span aria-hidden="true" class="aaw-menu-icon">${menuIcons[x[0]]||'▦'}</span><span>${x[1]}</span></button>`).join('');
 $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
 tab=b.dataset.tab;edit=null;deleted=false;render();
 });
-let w=await db.from('workers').select('id,full_name,is_active,is_deleted').eq('site_id',site).order('full_name');
+let w=await portalPages(db.from('workers').select('id,full_name,is_active,is_deleted').eq('site_id',site).order('full_name').order('id'));
 if(n!==seq)return;
 if(w.error){notice(w.error.message);return}
 workers=w.data||[];
@@ -360,6 +366,7 @@ if(tab==='salary')return salaryPayment(site);
 if(tab==='mastertools')return masterTools();
 if(tab==='production')return productionPanel(site);
 if(tab==='billing')return billingPanel();
+if(['profile','receipts','comparison','enquiries'].includes(tab))return window.AAWWorkflows[tab](site);
 let [table,fields]=config[tab];
 let order=tab==='workers'?'created_at':(fields.find(f=>f[2]==='date')||['created_at'])[0];
 let r=await db.from(table).select('*').eq('site_id',site).order(order,{ascending:false}).limit(100);
@@ -541,7 +548,7 @@ $('content').innerHTML=`<h2>Bulk Attendance</h2>
 <button id="load" class="alt">Load Attendance</button>
 <button id="present" class="alt">Mark All Present</button>
 </div>
-<div id="alist"></div><button id="saveAtt" disabled>Save All Attendance</button>`;
+<div class="grid"><label>Search worker<input id="attSearch" type="search" placeholder="Worker name"></label><label>Show<select id="attFilter"><option value="all">All workers</option><option value="missing">Not marked in saved attendance</option></select></label></div><p id="attFilterCount" role="status"></p><div id="alist"></div><button id="saveAtt" disabled>Save All Attendance</button>`;
 let saved=new Map(),loaded='',duplicates=false;
 async function load(){
 loaded='';$('saveAtt').disabled=true;
@@ -557,7 +564,7 @@ if(saved.has(k))duplicates=true;else saved.set(k,x);
 });
 $('alist').innerHTML=active.map(w=>{
 let x=saved.get(String(w.id)),s=x?.status||'present';
-return `<div class="att" data-id="${esc(w.id)}"><b>${esc(w.full_name)}</b><div class="grid">
+return `<div class="att" data-id="${esc(w.id)}" data-worker-name="${esc(w.full_name.toLowerCase())}" data-saved="${Boolean(x)}"><b>${esc(w.full_name)}</b><div class="grid">
 <label>Status<select class="as">${[['present','Present'],['absent','Absent'],['half_day','Half Day'],['leave','Leave']].map(([v,n])=>`<option value="${v}" ${s===v?'selected':''}>${n}</option>`).join('')}</select></label>
 <label>Attendance Mode<select class="amode"><option value="manual">Manual OT</option><option value="time" ${x?.check_in&&x?.check_out?'selected':''}>In-Time / Out-Time</option></select></label>
 <label>OT Hours<input class="ao" type="number" min="0" step="0.01" value="${Number(x?.overtime_hours||0)}"></label></div>
@@ -568,10 +575,12 @@ const update=()=>{const auto=row.querySelector('.amode').value==='time';row.quer
 try{const value=readAttendanceRow(row);row.querySelector('.ao').value=value.overtime_hours;row.querySelector('.atip').textContent=auto?'OT calculated after 8 hours.':''}catch(e){row.querySelector('.atip').textContent=e.message}};
 row.querySelectorAll('input,select').forEach(el=>el.addEventListener('change',update));update();
 });
-loaded=day;$('saveAtt').disabled=duplicates||!active.length;
+filterAttendance();loaded=day;$('saveAtt').disabled=duplicates||!active.length;
 notice(duplicates?'Duplicate attendance found; saving disabled':'Attendance loaded: '+day);
 }catch(e){notice('Load Error: '+e.message)}
 }
+function filterAttendance(){let count=0;document.querySelectorAll('#alist .att').forEach(row=>{row.hidden=!row.dataset.workerName.includes($('attSearch').value.toLowerCase())||($('attFilter').value==='missing'&&row.dataset.saved==='true');if(!row.hidden)count++});$('attFilterCount').textContent=count+' workers shown. Save All and Mark All Present apply to the full roster, including hidden rows.'}
+$('attSearch').oninput=filterAttendance;$('attFilter').onchange=filterAttendance;
 $('load').onclick=load;
 $('ad').onchange=()=>{loaded='';$('saveAtt').disabled=true;$('alist').innerHTML='Press Load Attendance'};
 $('present').onclick=()=>{
@@ -853,5 +862,5 @@ try{await history()}catch(e){notice(e.message)}
 }
 loadLibrary();
 </script>
-</body>
+<link rel="stylesheet" href="aaw-workflows.css?v=20261028W"><script src="aaw-workflows.js?v=20261028W"></script></body>
 </html>
