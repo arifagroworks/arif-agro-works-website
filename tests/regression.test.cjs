@@ -515,7 +515,7 @@ for(const width of [360,1440])test(`Professional Billing workspace: real editing
   await page.locator('#letterbody').selectText();await page.getByRole('button',{name:'Bold',exact:true}).click();
   assert.match(await page.locator('#letterbody').innerHTML(),/bold|<b>|<strong>/);
   await page.getByRole('combobox',{name:'Font',exact:true}).selectOption('Georgia');
-  assert.match(await page.locator('#letterbody').innerHTML(),/Georgia/i);
+  assert.match(await page.locator('#letterbody').innerHTML(),/Georgia/i);await page.getByRole('combobox',{name:'Size',exact:true}).selectOption('7');assert.match(await page.evaluate(()=>safeBody(document.getElementById('letterbody').innerHTML)),/font-size/);
   await page.locator('#letterbody').click();await page.keyboard.press('Control+End');
   await page.locator('#letterInsertTable').click();assert.equal(await page.locator('#letterbody td').count(),9);
   await page.locator('#letterbody td').first().click();await page.keyboard.type('Work details');
