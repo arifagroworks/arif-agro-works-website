@@ -22,7 +22,9 @@ Release-closeout adds automated owner-build configuration checks and version/sig
 
 ## Owner-only remaining steps
 
-1. Add the four signing secrets from the private backup in GitHub repository Settings → Secrets and variables → Actions. This connector cannot write repository secrets. No passwords/tokens should be pasted in chat.
+1. **Completed 28 October:** all four signing secrets configured; [Android Release run 40642513179](https://github.com/arifagroworks/arif-agro-works-website/actions/runs/40642513179) passed and [Android 1.4](https://github.com/arifagroworks/arif-agro-works-website/releases/tag/android-v1.4) is published. The owner confirms installation and operation.
+
+Historical setup instructions (already completed): Add the four signing secrets from the private backup in GitHub repository Settings → Secrets and variables → Actions. This connector cannot write repository secrets. No passwords/tokens should be pasted in chat.
 2. After that one-time setup, run **AAW Android Release** with Publish selected for the first public GitHub release. Future main-branch changes to `android-app/app/build.gradle` automatically verify/sign/publish a new version. Increase both versionName and versionCode. Existing versions are not overwritten; downgrades, mismatched package/signers and non-increasing update codes are rejected.
 3. Install the owner-signed APK on the actual phone and verify existing Master/Incharge logins and intended business use. Back up unfinished local entries before switching from a differently signed debug app. Actual-device installation is not claimed by emulator tests; cloud records are not removed by APK uninstall.
 4. Supabase leaked-password protection remains an owner Auth/plan setting; the connector cannot update Auth configuration. No paid upgrade was performed. See [owner setup](OWNER-RELEASE-SETUP.md).
@@ -31,4 +33,12 @@ No production business records were inserted, changed, deleted or reset during t
 
 ## Explicitly postponed
 
-The owner postponed full generative AI, voice and bill-photo reading on 28 October 2026. Do not activate provider billing, add an API key, or implement that next stage until the owner resumes it. Existing FAQ/guided tools stay available.
+The owner postponed full generative AI and voice on 28 October 2026. The owner subsequently requested a specific RA bill upload → reviewed GST invoice feature; that scoped document-import work is now authorized separately. Do not activate provider billing, add an API key, or implement that next stage until the owner resumes it. Existing FAQ/guided tools stay available.
+
+## Billing workspace improvement
+
+Cream/olive responsive workspace: mobile Details / Items-or-Letter / Preview-and-Payments tabs, item cards, fixed Save/Preview bar; desktop editor and printable document side-by-side. Saved-document search/type filter covers the latest 200 loaded records. Legacy backup/restore remains under More tools.
+
+Letterhead tools include undo/redo, fonts, sizes, headings, colour/highlight, lists, alignment, indentation, line spacing, safe paste, text tables and row/column controls. Formulas are not evaluated. An allowlist preserves safe formatting when saved/reopened and strips active HTML/unsafe CSS. Existing document storage/schema, payment guards and audit history stay in place. Unsaved-change warning does not claim offline autosave.
+
+Isolated browser tests cover real input retention, mobile/desktop layout, letter table editing, sanitization, save failure, search, print/PDF and payment-balance guards. No customer example bills or signatures are committed as fixtures, and no production business records are changed by these tests.

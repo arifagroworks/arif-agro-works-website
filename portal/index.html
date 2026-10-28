@@ -305,6 +305,7 @@ function billingPanel(){
     return;
   }
   const url='AAW_Billing_Studio_Final.html?role='+encodeURIComponent(expectedRole||'direct');
+  if(window.matchMedia('(max-width:700px)').matches){window.location.assign(url);return;}
   $('content').innerHTML=`<h2>Company Documents & Billing Studio</h2>
   <p class="muted">Master Admin workspace · Company document templates. Letterhead, Invoice, Quotation, Work Proforma and Measurement Bill.</p>
   <div class="card"><div class="actions"><a href="${url}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#ff752e;color:#102330;font-weight:800;padding:12px 15px;border-radius:8px;text-decoration:none">Open Billing Studio Full Screen ↗</a></div>
