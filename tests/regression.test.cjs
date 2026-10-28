@@ -53,7 +53,8 @@ async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-ma
           let data = table === 'staff_profiles' ? { role, full_name: 'Demo Staff' }
             : table === 'sites' ? [{ id: 'demo-site', site_name: 'Demo Site', is_active: true }] : table === 'site_assignments' ? [{site_id:'demo-site',user_id:'demo-user'}] : table === 'workers' ? demoWorkers : demoRows[table]||[];
           const q = new Proxy({}, { get(_target, method) {
-            if (method === 'eq') return (key, value) => { if (table === 'staff_profiles' && key === 'role' && value === 'incharge') data = []; return q; };
+            if (method === 'eq') return (key, value) => { if (table === 'staff_profiles' && key === 'role' && value === 'incharge') data = []; if(table==='aaw_billing_documents'&&key==='id'&&Array.isArray(data)&&data[0]?.id==='saved-row')data={id:value}; return q; };
+            if (method === 'single' && table === 'aaw_billing_documents') return () => {if(Array.isArray(data)&&data.length===1&&data[0].id==='saved-row')data=data[0];return q;};
             if (method === 'then') return resolve => resolve({ data, error: null });
             if (['insert', 'update', 'delete', 'upsert'].includes(method)) {if(!operational)throw Error('Unexpected database mutation in regression test');return (...args)=>{window.mockMutations.push({table,method,args});data=[{id:'saved-row'}];return q;};}
             return () => q;
@@ -494,4 +495,76 @@ test('Master command desk is absent for Incharge and denies an expired Master co
  const {page,context}=await openPage('/portal/index.html?role=master',{operational:true});try{
   await page.locator('[data-tab=assistant]').click();await page.evaluate(()=>{db.rpc=async()=>({data:{role:'incharge',enabled:true},error:null})});await page.getByRole('button',{name:'Client receivables',exact:true}).click();await page.waitForFunction(()=>document.getElementById('aaw-command-status').textContent.includes('Active Master Admin access required'));assert.equal(await page.locator('#aaw-command-output').textContent(),'');assert.deepEqual(await page.evaluate(()=>mockMutations),[]);
  }finally{await context.close()}
+});
+
+for(const width of [360,1440])test(`Professional Billing workspace: real editing, letter tables, PDF at ${width}px`,async()=>{
+ const {page,context,errors}=await openPage('/portal/AAW_Billing_Studio_Final.html',{width});
+ try{
+  await page.waitForFunction(()=>!document.getElementById('aawGate')).catch(async e=>{throw Error(JSON.stringify({errors,gate:await page.locator('#aawGate').textContent()}))});
+  assert.equal(await page.locator('#letterbody').isVisible(),false);
+  await page.locator('[data-step=items]').click();
+  await page.locator('#items input[aria-label=Description]').fill('Custom fabrication');
+  await page.locator('#items input[aria-label=Quantity]').fill('12.5');await page.locator('#items input[aria-label=Quantity]').press('Tab');
+  await page.locator('#items input[aria-label="Rate ₹"]').fill('100');await page.locator('#items input[aria-label="Rate ₹"]').press('Tab');
+  assert.equal(await page.locator('#grand').textContent(),'₹1,475.00');
+  assert.match(await page.locator('#billingDirtyStatus').textContent(),/Unsaved/);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  if(width===360)assert.equal(await page.locator('#items tr').evaluate(e=>getComputedStyle(e).display),'grid');
+  await page.locator('[data-step=details]').click();await page.locator('#type').selectOption('letterhead');await page.locator('[data-step=items]').click();
+  await page.locator('#letterbody').fill('Professional Hindi letter — नमस्ते');
+  await page.locator('#letterbody').selectText();await page.getByRole('button',{name:'Bold',exact:true}).click();
+  assert.match(await page.locator('#letterbody').innerHTML(),/bold|<b>|<strong>/);
+  await page.getByRole('combobox',{name:'Font',exact:true}).selectOption('Georgia');
+  assert.match(await page.locator('#letterbody').innerHTML(),/Georgia/i);
+  await page.locator('#letterbody').click();await page.keyboard.press('Control+End');
+  await page.locator('#letterInsertTable').click();assert.equal(await page.locator('#letterbody td').count(),9);
+  await page.locator('#letterbody td').first().click();await page.keyboard.type('Work details');
+  await page.getByRole('button',{name:'Add row',exact:true}).click();assert.equal(await page.locator('#letterbody tr').count(),4);
+  await page.locator('#letterbody td').first().click();await page.getByRole('button',{name:'Add column',exact:true}).click();assert.equal(await page.locator('#letterbody td').count(),16);
+  await page.locator('#letterbody td').first().click();await page.getByRole('button',{name:'Delete column',exact:true}).click();assert.equal(await page.locator('#letterbody td').count(),12);
+  await page.evaluate(()=>render());
+  assert.equal(await page.locator('#preview td').count(),12);
+  await page.locator('[data-step=preview]').click();assert.equal(await page.locator('#preview').isVisible(),true);
+  if(process.env.AAW_QA_DIR)await page.screenshot({path:path.join(process.env.AAW_QA_DIR,`billing-review-${width}.png`),fullPage:true});
+  await page.emulateMedia({media:'print'});assert.equal(await page.locator('#preview').isVisible(),true);assert.equal(await page.locator('.letter-ribbon').isVisible(),false);
+  const pdf=await page.pdf({format:'A4',printBackground:true});assert.ok(pdf.length>5000);if(process.env.AAW_QA_DIR)fs.writeFileSync(path.join(process.env.AAW_QA_DIR,`billing-letter-${width}.pdf`),pdf);
+  assert.deepEqual(errors,[]);
+ }finally{await context.close();}
+});
+test('Letter sanitizer preserves allowed formatting and tables while rejecting active content and CSS',async()=>{
+ const {page,context}=await openPage('/portal/AAW_Billing_Studio_Final.html');
+ try{
+ await page.waitForFunction(()=>!document.getElementById('aawGate'));
+ const result=await page.evaluate(()=>safeBody('<p style="color:#123456;text-align:center;position:fixed;background-image:url(https://evil.invalid/x);font-family:Georgia" onclick="alert(1)">Hello <b>World</b></p><table><tr><td colspan="2" style="line-height:1.5">Cell</td></tr></table><script>window.pwned=true</script><img src=x onerror="alert(2)"><a href="javascript:alert(3)">Link text</a><svg onload="alert(4)"></svg>'));
+ assert.match(result,/color:rgb\(18, 52, 86\)/);assert.match(result,/text-align:center/);assert.match(result,/font-family:Georgia/);assert.match(result,/colspan="2"/);assert.match(result,/Link text/);assert.doesNotMatch(result,/onclick|onerror|script|img|svg|href|position|url\(/);
+ }finally{await context.close();}
+});
+test('Billing save persists rich letters; failed save keeps unsaved changes and document search filters safely',async()=>{
+ const payload={type:'letterhead',docno:'LT-2026-001',company:'ARIF AGRO WORKS',rows:[],letterbody:'<p style="text-align:center;color:#123456">Saved letter</p>'};
+ const docs=[{id:'d1',site_id:'demo-site',document_type:'letterhead',document_number:'LT-2026-001',client_name:'Alpha Client',document_date:'2026-10-28',payload},{id:'d2',site_id:'demo-site',document_type:'quotation',document_number:'QT-2026-001',client_name:'Beta Client',payload:{type:'quotation',rows:[]}}];
+ const {page,context}=await openPage('/portal/AAW_Billing_Studio_Final.html',{width:1440,operational:true,demoRows:{aaw_billing_documents:docs}});
+ try{
+ page.on('dialog',dialog=>dialog.accept());await page.waitForFunction(()=>!document.getElementById('aawGate')&&cloudDocs.length===2);
+ await page.locator('#billingSearch').fill('Alpha');assert.equal(await page.locator('#saved .savedrow:visible').count(),1);
+ await page.locator('#billingSearch').fill('');await page.locator('#billingFilter').selectOption('quotation');assert.equal(await page.locator('#saved .savedrow:visible').count(),1);
+ await page.locator('#billingFilter').selectOption('');await page.locator('[data-cloud-load=d1]').click();
+ assert.match(await page.locator('#letterbody').innerHTML(),/text-align:center/);
+ await page.locator('#letterbody').fill('Changed letter');assert.match(await page.locator('#billingDirtyStatus').textContent(),/Unsaved/);
+ await page.locator('#aawSaveButton').click();await page.waitForFunction(()=>document.getElementById('billingDirtyStatus').textContent.startsWith('Saved online'));
+ const m=await page.evaluate(()=>window.mockMutations);assert.equal(m.length,1);assert.match(m[0].args[0].payload.letterbody,/Changed letter/);
+ await page.locator('#letterbody').fill('Not saved');await page.evaluate(()=>{aawDb.from=()=>{throw Error('Synthetic offline failure')};});
+ await page.locator('#aawSaveButton').click();await page.waitForFunction(()=>document.getElementById('aawCloudStatus').textContent.includes('Save failed'));
+ assert.match(await page.locator('#billingDirtyStatus').textContent(),/Unsaved/);
+ }finally{await context.close();}
+});
+test('Billing payment entry keeps RA and retention balance guard after workspace changes',async()=>{
+ const {page,context,errors}=await openPage('/portal/AAW_Billing_Studio_Final.html',{width:1440,operational:true});
+ try{
+ await page.waitForFunction(()=>!document.getElementById('aawGate'));
+ const messages=[];page.on('dialog',async d=>{messages.push(d.message());await d.dismiss();});
+ await page.evaluate(()=>{cloudEditing='demo-invoice';aawPaymentDoc=cloudEditing;aawPayments=[{amount:100}];window.aawLedgerLoaded=true;rows=[{description:'Demo',unit:'KG',l:'',w:'',h:'',qty:10,rate:100}];document.getElementById('aawBillStage').value='running';document.getElementById('aawPrevious').value=200;document.getElementById('aawRetention').value=50;document.getElementById('aawPayAmount').value=900;document.getElementById('aawPayRef').value='DEMO-ONLY';document.getElementById('aawPayDate').value='2026-10-28';render();});
+ await page.evaluate(()=>aawAddPayment());assert.match(messages.pop(),/exceeds outstanding/);
+ await page.locator('#aawPayAmount').fill('100');await page.evaluate(()=>aawAddPayment());assert.match(messages.pop(),/Record payment of ₹100.00/);
+ assert.deepEqual(await page.evaluate(()=>window.mockMutations),[]);assert.deepEqual(errors,[]);
+ }finally{await context.close();}
 });
