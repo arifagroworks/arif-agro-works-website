@@ -52,16 +52,22 @@ async function openPage(url, { role = 'master', sessionKey = 'aaw-portal-auth-ma
           window.mockCalls.push(table);
           let data = table === 'staff_profiles' ? { role, full_name: 'Demo Staff' }
             : table === 'sites' ? [{ id: 'demo-site', site_name: 'Demo Site', is_active: true }] : table === 'site_assignments' ? [{site_id:'demo-site',user_id:'demo-user'}] : table === 'workers' ? demoWorkers : demoRows[table]||[];
-          const q = new Proxy({}, { get(_target, method) {
+          let rangeWindow=null;const q = new Proxy({}, { get(_target, method) {
             if (method === 'eq') return (key, value) => { if (table === 'staff_profiles' && key === 'role' && value === 'incharge') data = []; if(table==='aaw_billing_documents'&&key==='id'&&Array.isArray(data)&&data[0]?.id==='saved-row')data={id:value}; return q; };
             if (method === 'single' && table === 'aaw_billing_documents') return () => {if(Array.isArray(data)&&data.length===1&&data[0].id==='saved-row')data=data[0];return q;};
-            if (method === 'then') return resolve => resolve({ data, error: null });
+            if(method==='range')return(start,end)=>{rangeWindow=[start,end];return q;};
+            if (method === 'then') return resolve => resolve({ data:Array.isArray(data)&&rangeWindow?data.slice(rangeWindow[0],rangeWindow[1]+1):data, error: null });
             if (['insert', 'update', 'delete', 'upsert'].includes(method)) {if(!operational)throw Error('Unexpected database mutation in regression test');return (...args)=>{window.mockMutations.push({table,method,args});data=[{id:'saved-row'}];return q;};}
             return () => q;
           }});
           return q;
         },
         rpc(name,args) {
+          if(name==='aaw_search_billing_documents'){
+            let rows=[...(demoRows.aaw_billing_documents||[])];const q=(args.p_search||'').toLowerCase();rows=rows.filter(r=>(!args.p_type||r.document_type===args.p_type)&&(!q||[r.document_number,r.client_name,r.document_date,r.site_id==='demo-site'?'Demo Site':''].join(' ').toLowerCase().includes(q)));return Promise.resolve({data:{rows:rows.slice(args.p_offset,args.p_offset+args.p_limit),total:rows.length},error:null});
+          }
+          if(name==='aaw_next_document_number')return Promise.resolve({data:({invoice:'INV',quotation:'QT',proforma:'WP',measurement:'MB',letterhead:'LT'}[args.p_type]||'INV')+'-'+args.p_year+'-001',error:null});
+          if(name==='aaw_find_ra_source')return Promise.resolve({data:null,error:null});
           if(!operational)throw Error('Unexpected RPC in regression test');
           window.mockRpc.push({name,args});
           const answers={get_final_food_deductions:[],aaw_session_context:{user_id:'demo-user',role,full_name:'Demo Staff',enabled:true},aaw_incharge_choices:[{user_id:'demo-user',full_name:'Demo Incharge'}],aaw_food_preview:{grocery_total:300,total_food_days:3,can_finalize:true,entries:[{worker_id:'w1',full_name:'Worker One',food_days:3,payment_type:'salary_deduction',share_amount:300}]},aaw_site_financials:{billed:1000,collected:600,receivable:400,site_expenses:50,grocery_cash:100,salary_cash:300,advance_cash:50,earned_labour:500,company_food:100,cash_surplus:100,billed_operating_surplus:350}};
@@ -223,7 +229,7 @@ test('Food blocks misleading amounts when imported periods overlap', async () =>
 });
 test('Active entry pages contain valid JavaScript', () => {
   for (const file of ['index.html','portal/index.html','portal/food-v518-fixed.html','portal/AAW_Billing_Studio_Final.html','portal/AAW_Daily_Production_V526_Restore_Test.html','portal/incharge-test-fixed.html','portal/site-assignment-test.html','portal/incharge-access-test.html','portal/salary-test.html','portal/AAW_Site_Backup_Master.html','portal/v519-guard-check.html']) {
-    for (const match of read(file).matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) new vm.Script(match[1], {filename:file});
+    for (const match of read(file).matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)){if(/type=[\"']application\/ld\+json[\"']/i.test(match[1]))JSON.parse(match[2]);else new vm.Script(match[2],{filename:file});}
   }
 });
 
@@ -567,9 +573,9 @@ test('Billing save persists rich letters; failed save keeps unsaved changes and 
  const {page,context}=await openPage('/portal/AAW_Billing_Studio_Final.html',{width:1440,operational:true,demoRows:{aaw_billing_documents:docs}});
  try{
  page.on('dialog',dialog=>dialog.accept());await page.waitForFunction(()=>!document.getElementById('aawGate')&&cloudDocs.length===2);
- await page.locator('#billingSearch').fill('Alpha');assert.equal(await page.locator('#saved .savedrow:visible').count(),1);
- await page.locator('#billingSearch').fill('');await page.locator('#billingFilter').selectOption('quotation');assert.equal(await page.locator('#saved .savedrow:visible').count(),1);
- await page.locator('#billingFilter').selectOption('');await page.locator('[data-cloud-load=d1]').click();
+ await page.locator('#billingSearch').fill('Alpha');await page.waitForTimeout(400);assert.equal(await page.locator('#saved .savedrow:visible').count(),1);
+ await page.locator('#billingSearch').fill('');await page.locator('#billingFilter').selectOption('quotation');await page.waitForTimeout(400);assert.equal(await page.locator('#saved .savedrow:visible').count(),1);
+ await page.locator('#billingFilter').selectOption('');await page.waitForTimeout(400);await page.locator('[data-cloud-load=d1]').click();
  assert.match(await page.locator('#letterbody').innerHTML(),/text-align:center/);
  await page.locator('#letterbody').fill('Changed letter');assert.match(await page.locator('#billingDirtyStatus').textContent(),/Unsaved/);
  await page.locator('#aawSaveButton').click();await page.waitForFunction(()=>document.getElementById('billingDirtyStatus').textContent.startsWith('Saved online'));
@@ -651,4 +657,19 @@ test('Site Hard Delete invalidates a preview on site change and reports server r
   await page.evaluate(()=>{db.rpc=async()=>({error:{message:'Active Master Admin access required'}})});await page.locator('#deletePrepare').click();await page.waitForFunction(()=>document.getElementById('deleteStatus').textContent.includes('Preparation blocked'));assert.ok(await page.locator('#deleteConfirm1').isDisabled());assert.ok(await page.locator('#deleteConfirm2').isDisabled());
   await page.evaluate(()=>{document.getElementById('site').add(new Option('Other Site','other-site'));});await page.locator('#site').selectOption('other-site');assert.equal(await page.locator('#deletePreview').textContent(),'');assert.equal(await page.locator('#deletePhrase').inputValue(),'');assert.ok(await page.locator('#deleteDownload').isDisabled());assert.deepEqual(errors,[]);
  }finally{await context.close()}
+});
+
+test('Server bill search and pagination reach old records while keeping the current draft',async()=>{
+ const docs=Array.from({length:251},(_,i)=>({id:'old-'+i,site_id:'demo-site',document_type:'invoice',document_number:'INV-'+i,client_name:i===250?'Older Client':'Client '+i,payload:{type:'invoice',rows:[]}}));
+ const {page,context,errors}=await openPage('/portal/AAW_Billing_Studio_Final.html',{demoRows:{aaw_billing_documents:docs}});
+ try{await page.waitForFunction(()=>cloudDocs.length===50);await page.locator('[data-step=saved]').click();await page.locator('#billingNext').click();await page.waitForFunction(()=>billPageOffset===50);assert.match(await page.locator('#saved').textContent(),/INV-50/);await page.locator('#billingSearch').fill('Older Client');await page.waitForFunction(()=>cloudDocs.length===1);assert.match(await page.locator('#saved').textContent(),/INV-250/);assert.equal(await page.locator('#billingNext').isDisabled(),true);assert.deepEqual(errors,[]);}finally{await context.close()}
+});
+test('RA and Hard Delete Hindi labels reverse without translating entered source values',async()=>{
+ const {page,context,errors}=await openPage('/portal/AAW_Billing_Studio_Final.html');try{await page.waitForFunction(()=>!document.getElementById('aawGate'));await page.locator('#raImportDetails').evaluate(e=>e.open=true);await page.locator('#raClient').fill('Original Client');await page.evaluate(()=>AAWLanguage.setLanguage('hi'));assert.match(await page.locator('#raRead').textContent(),/फाइल/);assert.match(await page.locator('#raImportDetails summary').first().textContent(),/आरए/);assert.equal(await page.locator('#raClient').inputValue(),'Original Client');await page.evaluate(()=>AAWLanguage.setLanguage('en'));assert.equal(await page.locator('#raRead').textContent(),'Read selected file');assert.deepEqual(errors,[])}finally{await context.close()}
+});
+test('Worker/attendance helper reads beyond 1500 rows and preserves a later-page failure',async()=>{
+ const {page,context}=await openPage('/portal/index.html?role=master');try{await page.locator('#app').waitFor({state:'visible'});const r=await page.evaluate(async()=>{const source=Array.from({length:1501},(_,i)=>({id:i}));const calls=[];const good=await portalPages({range:async(a,b)=>{calls.push([a,b]);return{data:source.slice(a,b+1),error:null}}});const error=await portalPages({range:async(a,b)=>a>=500?{data:null,error:{message:'Synthetic page failure'}}:{data:source.slice(a,b+1),error:null}});return{count:good.data.length,last:good.data.at(-1).id,calls,error:error.error.message}});assert.equal(r.count,1501);assert.equal(r.last,1500);assert.equal(r.calls.length,4);assert.equal(r.error,'Synthetic page failure')}finally{await context.close()}
+});
+test('Bill history export uses keyset pages beyond the former 1000-row batch cap',async()=>{
+ const {page,context}=await openPage('/portal/AAW_Site_Backup_Master.html');try{await page.locator('#tools').waitFor({state:'visible'});const result=await page.evaluate(async()=>{const source=Array.from({length:1201},(_,i)=>({audit_id:i+1,document_id:'demo-doc',previous_payload:{rows:[]}}));let calls=0;db.from=()=>{let after=0;const q={select(){return q},in(){return q},order(){return q},limit(){return q},gt(_key,n){after=n;return q},then(resolve){calls++;resolve({data:source.filter(x=>x.audit_id>after).slice(0,500),error:null})}};return q};const rows=await childrenRows('aaw_billing_document_history','document_id',['demo-doc']);return{count:rows.length,last:rows.at(-1).audit_id,calls}});assert.deepEqual(result,{count:1201,last:1201,calls:3})}finally{await context.close()}
 });

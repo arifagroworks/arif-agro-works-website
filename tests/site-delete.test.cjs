@@ -12,6 +12,7 @@ async function confirm(r){return scalar('select public.aaw_confirm_site_delete($
 const execute=(r,text=r.archive_text)=>scalar('select public.aaw_execute_site_delete($1,$2,$3,$4) as v',[r.request_id,'DELETE Demo A',r.digest,text]);
 before(async()=>{
  db=new PGlite();for(const p of ['tests/fixtures/backend-schema.sql','database/proposals/access-hardening.sql','supabase/migrations/20261027143748_aaw_ready_to_use_operations.sql','supabase/migrations/20261027144256_aaw_guard_transfer_window.sql','supabase/migrations/20261028071051_aaw_invoice_tax_heads.sql',migration])await db.exec(fs.readFileSync(p,'utf8'));
+await db.exec(fs.readFileSync('supabase/migrations/'+fs.readdirSync('supabase/migrations').find(x=>x.endsWith('_usability_followups.sql')),'utf8'));
  await db.exec(`insert into auth.users(id) values('${id(1)}'),('${id(2)}'),('${id(3)}'),('${id(4)}');
  insert into public.staff_profiles(user_id,full_name,role)values('${id(1)}','Master A','master'),('${id(2)}','Incharge','incharge'),('${id(3)}','Master B','master'),('${id(4)}','Disabled','master');
  update auth.users set banned_until='2099-01-01' where id='${id(4)}';
