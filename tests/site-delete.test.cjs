@@ -1,7 +1,7 @@
 const {test,before,after,beforeEach,afterEach}=require('node:test');
 const assert=require('node:assert/strict'),fs=require('node:fs'),{PGlite}=require('@electric-sql/pglite');
 const id=n=>'20000000-0000-0000-0000-'+String(n).padStart(12,'0');let db;
-const migration='supabase/migrations/20261028111821_site_hard_delete.sql';
+const migration='supabase/migrations/20261028115050_site_hard_delete.sql';
 const scalar=async(sql,args=[])=> (await db.query(sql,args)).rows[0].v;
 async function role(n=1){await db.exec('SET LOCAL ROLE authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,true)",[id(n)])}
 async function owner(){await db.exec('RESET ROLE')}
