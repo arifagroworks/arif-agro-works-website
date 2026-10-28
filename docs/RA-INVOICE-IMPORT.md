@@ -24,7 +24,7 @@ Original file bytes, OCR text and preview image stay in browser memory. Only sel
 
 The browser downloads version-pinned Tesseract.js 7.0.0, its 7.0.0 WASM core and English data 1.0.0 from jsDelivr. The main loader has SHA-384 integrity verification. PDF.js 6.4.299 reads PDF text locally or renders scanned pages for OCR. No paid inference API/key is configured. CDN availability, first-load downloads, device memory and image quality affect reading; pasted text/manual reviewed rows remain available when reading fails.
 
-Limit: 20 MB, six PDF pages, one RA abstract per import. No handwritten-bill guarantee. Cancel releases the reader; long reads time out. Duplicate-source checks cover the currently loaded document list (latest 200); normal database invoice-number uniqueness remains authoritative.
+Limit: 20 MB, six PDF pages, one RA abstract and one combined GST rate per invoice. Mixed slabs are not automatically combined. No handwritten-bill guarantee. Cancel releases the reader; long reads time out. Duplicate-source checks cover the currently loaded document list (latest 200); normal database invoice-number uniqueness remains authoritative.
 
 PDF/XLS exports are portal-generated documents; statutory e-invoice/IRN or return filing is not performed by this feature.
 

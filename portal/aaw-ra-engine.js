@@ -41,7 +41,10 @@ function parse(text,words=[]){
    if([di,qi,ri,ui].every(i=>i>=0))for(const raw of lines.slice(index+1)){const cols=raw.split(sep).map(s=>s.trim());if(cols.length!==heads.length||!numeric(cols[qi])||!numeric(cols[ri]))continue;candidates.push({description:cols[di],unit:cols[ui],qty:cols[qi],rate:cols[ri],sourceAmount:'',sourceLine:raw});}
   }
  }
- const rate=source.match(/(?:add\s*tax|GST|IGST)\s*(?:@|rate|\()?\s*(\d{1,2}(?:\.\d{1,2})?)\s*%/i)?.[1]||'';
+ const readRate=label=>source.match(new RegExp('\\b'+label+'\\s*(?:@|rate|\\()?\\s*(\\d{1,2}(?:\\.\\d{1,2})?)\\s*%','i'))?.[1];
+ let rate='';const cgst=readRate('CGST'),sgst=readRate('SGST');
+ if(cgst&&sgst)rate=String(Number(cgst)+Number(sgst));else if(cgst||sgst)warnings.push('Only one split GST head was read. Verify the combined CGST + SGST rate.');else rate=readRate('IGST')||readRate('GST')||readRate('add\\s*tax')||'';
+ const overallRates=[...source.matchAll(/\b(?:add\s*tax|IGST|GST)\s*(?:@|rate|\()?\s*(\d{1,2}(?:\.\d{1,2})?)\s*%/gi)].map(m=>Number(m[1]));if(new Set(overallRates).size>1){rate='';warnings.push('Multiple GST rates were read. A single-rate invoice cannot automatically combine mixed tax slabs.');}
  const client=source.match(/client\s*name\s*[:\-]\s*([^\n]+)/i)?.[1]?.split(/R\/A\s*Bill|Period\s*:/i)[0].trim()||'';
  const project=source.match(/project\s*name\s*[:\-]\s*([^\n]+)/i)?.[1]?.split(/R\/A\s*Bill/i)[0].trim()||'';
  const reference=source.match(/(?:R\s*\/\s*A|RA)\s*Bill\s*(?:No\.?\s*)?[:\-]\s*([A-Za-z0-9/\-]+)/i)?.[1]||'';

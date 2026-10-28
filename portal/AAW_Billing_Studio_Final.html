@@ -103,7 +103,14 @@ async function aawAssignLegacy(id){
  if(!data)return alert('No record updated. Reload and check whether it was already mapped.');
  await cloudList();alert(bill.document_number+' assigned to '+name+'.');
 }
-function safeBody(html){return window.AAWLetterTools?window.AAWLetterTools.sanitize(html):'';}
+function safeBody(html){
+ if(window.AAWLetterTools)return window.AAWLetterTools.sanitize(html);
+ // A failed optional workspace download must never replace an existing letter with empty text.
+ const template=document.createElement('template');template.innerHTML=String(html||'');
+ template.content.querySelectorAll('script,iframe,object,embed,form,svg,math,style,link,img').forEach(e=>e.remove());
+ template.content.querySelectorAll('*').forEach(el=>{for(const a of [...el.attributes])el.removeAttribute(a.name)});
+ return template.innerHTML;
+}
 
 async function cloudSave(){
  if(!aawUser)return alert('Master Admin login required.');
