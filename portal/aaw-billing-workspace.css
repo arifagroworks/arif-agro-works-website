@@ -55,3 +55,6 @@
 .ra-import-panel #raReadStatus{overflow-wrap:anywhere}.ra-printed-details,.ra-bill-addresses>div{overflow-wrap:anywhere;min-width:0}
 .billing-workspace .doc>table th:nth-child(1){width:4%}.billing-workspace .doc>table th:nth-child(2){width:33%}.billing-workspace .doc>table th:nth-child(3){width:8%}.billing-workspace .doc>table th:nth-child(4){width:18%}.billing-workspace .doc>table th:nth-child(5){width:15%}.billing-workspace .doc>table th:nth-child(6){width:22%}.billing-workspace .aaw-settlement{border-color:#d8dbc5}
 @media screen and (max-width:700px){.billing-workspace .billing-grid{display:flex;flex-direction:column;align-items:stretch}.billing-workspace .billing-form{display:contents}.billing-workspace .billing-preview{order:1}.billing-workspace #aawLedgerPanel{order:2}.billing-workspace .doc>table{font-size:8.5px}.billing-workspace .doc>table td:nth-child(n+3){white-space:nowrap;letter-spacing:-.15px}}
+/* Printed invoices use the same olive brand; legacy inline blue table rules must not leak to paper. */
+.billing-workspace{--line:#d8dbc5;--blue:#65713d;--navy:#30391f;--sky:#f2f0df;--orange:#a7a16a;--ink:#30391f}
+.billing-workspace .doc table th{background:#e8ead3!important;color:#30391f!important;border-color:#d8dbc5!important}.billing-workspace .doc table td{border-color:#d8dbc5}.billing-workspace .dochead small{color:#65713d}
