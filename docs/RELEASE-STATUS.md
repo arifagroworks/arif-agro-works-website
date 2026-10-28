@@ -20,14 +20,11 @@ The pre-merge run [40564171580](https://github.com/arifagroworks/arif-agro-works
 
 Release-closeout adds automated owner-build configuration checks and version/signer compatibility guards. Their current result is recorded by the closeout PR checks; the ten new isolated release tests passed locally.
 
-## Owner-only remaining steps
+## Owner release setup completed
 
-1. **Completed 28 October:** all four signing secrets configured; [Android Release run 40642513179](https://github.com/arifagroworks/arif-agro-works-website/actions/runs/40642513179) passed and [Android 1.4](https://github.com/arifagroworks/arif-agro-works-website/releases/tag/android-v1.4) is published. The owner confirms installation and operation.
+The owner configured all four signing secrets. [Android Release run 40642513179](https://github.com/arifagroworks/arif-agro-works-website/actions/runs/40642513179) passed and [Android 1.4](https://github.com/arifagroworks/arif-agro-works-website/releases/tag/android-v1.4) is published. The owner confirmed installation and operation on 28 October. Future version bumps still use the permanent key and compatibility guards.
 
-Historical setup instructions (already completed): Add the four signing secrets from the private backup in GitHub repository Settings → Secrets and variables → Actions. This connector cannot write repository secrets. No passwords/tokens should be pasted in chat.
-2. After that one-time setup, run **AAW Android Release** with Publish selected for the first public GitHub release. Future main-branch changes to `android-app/app/build.gradle` automatically verify/sign/publish a new version. Increase both versionName and versionCode. Existing versions are not overwritten; downgrades, mismatched package/signers and non-increasing update codes are rejected.
-3. Install the owner-signed APK on the actual phone and verify existing Master/Incharge logins and intended business use. Back up unfinished local entries before switching from a differently signed debug app. Actual-device installation is not claimed by emulator tests; cloud records are not removed by APK uninstall.
-4. Supabase leaked-password protection remains an owner Auth/plan setting; the connector cannot update Auth configuration. No paid upgrade was performed. See [owner setup](OWNER-RELEASE-SETUP.md).
+Remaining owner Auth setting: Supabase leaked-password protection remains an owner Auth/plan setting; the connector cannot update Auth configuration. No paid upgrade was performed. See [owner setup](OWNER-RELEASE-SETUP.md).
 
 No production business records were inserted, changed, deleted or reset during this closeout. The site export tool remains read-only; destructive bulk deletion stays locked by design.
 
@@ -42,3 +39,9 @@ Cream/olive responsive workspace: mobile Details / Items-or-Letter / Preview-and
 Letterhead tools include undo/redo, fonts, sizes, headings, colour/highlight, lists, alignment, indentation, line spacing, safe paste, text tables and row/column controls. Formulas are not evaluated. An allowlist preserves safe formatting when saved/reopened and strips active HTML/unsafe CSS. Existing document storage/schema, payment guards and audit history stay in place. Unsaved-change warning does not claim offline autosave.
 
 Isolated browser tests cover real input retention, mobile/desktop layout, letter table editing, sanitization, save failure, search, print/PDF and payment-balance guards. No customer example bills or signatures are committed as fixtures, and no production business records are changed by these tests.
+
+## RA import upgrade
+
+Master Billing Studio now includes browser-local RA PDF/photo/text import, reviewed work rows, exact paise arithmetic, IGST or separately rounded CGST/SGST, additional GST invoice particulars, and current-draft verification before saving/printing. Imported current-period quantities cannot deduct previous certified work twice. Source amount mismatches above ₹1 block preparation; smaller rounding differences require review. OCR readings remain subject to the owner's source check.
+
+Read [RA invoice import](RA-INVOICE-IMPORT.md) for supported layouts, privacy, limits and the workflow. The uploaded real examples were used only in local reading verification; no example business invoice was saved and no customer source images/signatures were committed. The tax-head function migration is applied and verified on the existing backend; legacy calculations and business rows remain unchanged. Local full regression suite passed 160 tests, plus real image-OCR and synthetic PDF.js reading checks outside production.

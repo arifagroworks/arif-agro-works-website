@@ -76,8 +76,8 @@ let cleanSnapshot='';const snapshot=()=>JSON.stringify({...collect(),id:null,upd
 let dirty=false;function updateDirty(){dirty=cleanSnapshot!==snapshot();dirtyStatus.textContent=dirty?'Unsaved changes':'No unsaved changes';dirtyStatus.dataset.dirty=String(dirty);}
 const baseRender=render;render=function(){baseRender();const letter=v('type')==='letterhead';document.body.classList.toggle('billing-is-letter',letter);byId('billingDockTotal').textContent=letter?'Letterhead':byId('grand').textContent;byId('billingDockSave').disabled=!aawCloudReady;if(cleanSnapshot)updateDirty();};
 const statusBase=aawStatus;aawStatus=function(message,state){statusBase(message,state);byId('billingDockSave').disabled=!aawCloudReady;};
-const baseNew=newDoc;newDoc=function(){if(dirty&&!confirm('Discard unsaved changes and start a new document?'))return; baseNew();cleanSnapshot=snapshot();updateDirty();setStage('details');};
-const baseLoad=cloudLoad;cloudLoad=function(id){if(dirty&&!confirm('Discard unsaved changes and open this document?'))return;baseLoad(id);cleanSnapshot=snapshot();updateDirty();setStage('details');};
+const baseNew=newDoc;newDoc=function(){if(dirty&&!confirm('Discard unsaved changes and start a new document?'))return false; baseNew();byId('date').value=new Date().toLocaleDateString('en-CA');cleanSnapshot=snapshot();updateDirty();setStage('details');return true;};
+const baseLoad=cloudLoad;cloudLoad=function(id){if(dirty&&!confirm('Discard unsaved changes and open this document?'))return false;baseLoad(id);cleanSnapshot=snapshot();updateDirty();setStage('details');return true;};
 const baseSave=cloudSave;cloudSave=async function(){const before=snapshot();const ok=await baseSave();if(ok&&snapshot()===before){cleanSnapshot=snapshot();updateDirty();dirtyStatus.textContent='Saved online · '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});}return ok;};
 form.addEventListener('input',()=>updateDirty());form.addEventListener('change',()=>updateDirty());window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 // Preserve selected text when interacting with toolbar controls.
@@ -110,5 +110,6 @@ const words=document.createElement('p');words.className='muted';words.id='letter
 const renderSafe=render;render=function(){renderSafe();if(v('type')==='letterhead'){const content=byId('preview').querySelector('[style*="min-height:420px"]');if(content)content.innerHTML=sanitize(editor.innerHTML);}};
 const initialList=cloudList;let initialized=false;cloudList=async function(){await initialList();if(!initialized){initialized=true;cleanSnapshot=snapshot();updateDirty();}render();};
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();if(aawCloudReady)cloudSave();}});
+window.AAWBillingWorkspace={setBaseline(){cleanSnapshot=snapshot();updateDirty();}};
 cleanSnapshot=snapshot();render();
 })();

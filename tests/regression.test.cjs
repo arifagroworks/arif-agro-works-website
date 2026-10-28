@@ -568,3 +568,34 @@ test('Billing payment entry keeps RA and retention balance guard after workspace
  assert.deepEqual(await page.evaluate(()=>window.mockMutations),[]);assert.deepEqual(errors,[]);
  }finally{await context.close();}
 });
+
+for(const width of [360,1440])test(`RA text import creates a reviewed GST draft without saving or double-deducting previous bills at ${width}px`,async()=>{
+ const {page,context,errors}=await openPage('/portal/AAW_Billing_Studio_Final.html',{width,operational:true});
+ try{
+ page.on('dialog',d=>d.accept());await page.waitForFunction(()=>!document.getElementById('aawGate'));
+ await page.locator('#raImportDetails').evaluate(e=>e.open=true);
+ const text='Client Name: Demo Client\nProject Name: Demo Project\nR/A Bill No.: RA-DEMO\nQuantities up to last This Bill up to date\nSynthetic fabrication KG 30000 32 960000 8168.550 6183.453 14352.003 261394 197870 459264\nSynthetic fixing PCS 10000 60 600000 361 1168 1529 21660 70080 91740\nAdd tax @ 18%';
+ await page.locator('#raSourceText').evaluate(e=>e.closest('details').open=true);await page.locator('#raSourceText').fill(text);await page.locator('#raParse').click();assert.equal(await page.locator('#raRows tr').count(),2);
+ await page.locator('#raTaxMode').selectOption('igst');await page.locator('#raReviewed').check();await page.locator('#raPrepare').click();
+ assert.equal(await page.locator('#grand').textContent(),'₹3,16,181.59');assert.equal(await page.locator('#aawPrevious').inputValue(),'0');assert.equal(await page.locator('#aawBillStage').inputValue(),'regular');
+ assert.deepEqual(await page.evaluate(()=>window.mockMutations),[]);
+ assert.match(await page.evaluate(()=>AAWRAImport.issueError()),/Select the site/);
+ await page.locator('#aawBillSite').selectOption('demo-site');await page.locator('.billing-branding:not(.ra-invoice-fields) summary').click();await page.locator('#address').fill('Demo company address');
+ await page.locator('#clientgst').fill('06AAAAA0000A1Z5');await page.locator('#raBillTo').fill('Demo recipient address');await page.locator('#raShipTo').fill('Demo work site address');await page.locator('#raPlace').fill('Demo state 06');await page.locator('#raSac').fill('123456');
+ await page.locator('[data-step=preview]').click();await page.locator('#raIssueReviewed').check();assert.equal(await page.evaluate(()=>AAWRAImport.issueError()),'');
+ assert.match(await page.locator('#preview').innerText(),/IGST @ 18%/);assert.match(await page.locator('#preview').innerText(),/Three Lakh Sixteen Thousand One Hundred Eighty One/);
+ await page.locator('#aawSaveButton').click();await page.waitForFunction(()=>window.mockMutations.length===1&&window.aawLedgerLoaded);const saved=await page.evaluate(()=>window.mockMutations[0].args[0]);assert.equal(saved.payload.raImport.quantityBasis,'this_bill');assert.equal(saved.payload.invoiceParticulars.raInvoiceTax,'igst');assert.equal(saved.payload.previousCertified,0);assert.equal(saved.payload.rows[0].qty,'6183.453');
+ await page.evaluate(()=>{window.raExports=[];downloadBlob=async(blob,name)=>raExports.push({name,text:await blob.text()});downloadExcel();});await page.waitForFunction(()=>window.raExports.length===1);const exported=await page.evaluate(()=>raExports[0]);assert.match(exported.text,/IGST 18%/);assert.match(exported.text,/316181.59/);assert.match(exported.text,/Demo recipient address/);assert.match(exported.text,/RA-DEMO/);if(process.env.AAW_QA_DIR){await page.screenshot({path:path.join(process.env.AAW_QA_DIR,`ra-invoice-review-${width}.png`),fullPage:true});const pdf=await page.pdf({format:'A4',printBackground:true});fs.writeFileSync(path.join(process.env.AAW_QA_DIR,`ra-invoice-review-${width}.pdf`),pdf);}
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+ await page.evaluate(()=>{document.getElementById('gst').value='12';render();});assert.match(await page.evaluate(()=>AAWRAImport.issueError()),/Review the current draft/);assert.equal(await page.locator('#raIssueReviewed').isChecked(),false);
+ assert.deepEqual(errors,[]);
+ }finally{await context.close();}
+});
+test('RA file reading fails safely and cancelling a new draft preserves an existing letter',async()=>{
+ const {page,context,errors}=await openPage('/portal/AAW_Billing_Studio_Final.html',{width:1440});
+ try{await page.waitForFunction(()=>!document.getElementById('aawGate'));await page.locator('#raImportDetails').evaluate(e=>e.open=true);
+ await page.locator('#raFile').setInputFiles({name:'demo.png',mimeType:'image/png',buffer:Buffer.from('not an image')});await page.locator('#raRead').click();await page.waitForFunction(()=>!document.getElementById('raRead').disabled);assert.match(await page.locator('#raReadStatus').textContent(),/Could not map file/);assert.equal(await page.locator('#raRows tr').count(),0);assert.deepEqual(await page.evaluate(()=>window.mockMutations),[]);
+ await page.locator('#type').selectOption('letterhead');await page.locator('#letterbody').fill('Keep my unsaved letter');
+ page.on('dialog',d=>d.dismiss());await page.locator('.toolbar button').filter({hasText:'+ New Document'}).click();assert.equal(await page.locator('#letterbody').textContent(),'Keep my unsaved letter');assert.equal(await page.locator('#type').inputValue(),'letterhead');assert.deepEqual(errors,[]);
+ }finally{await context.close();}
+});
